@@ -15,9 +15,8 @@ import {
   setActiveModel,
   testModel,
   getActiveModelId,
+  DEFAULT_CAPABILITIES,
 } from '../services/modelStore.js';
-
-const DEFAULT_CAPABILITIES = ['continue', 'rewrite', 'polish', 'expand', 'outline', 'fulltext', 'dialogue', 'worldview'];
 
 const router = Router();
 

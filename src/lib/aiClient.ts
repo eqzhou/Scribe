@@ -106,33 +106,42 @@ async function streamRequest(
   }
 }
 
-/** 续写：在光标处或文末续写下文 */
-export function streamContinue(
-  req: ContinueRequest,
-  onChunk: OnStreamChunk,
-  onDone: OnStreamDone,
-  onError: OnStreamError,
-  signal?: AbortSignal,
-): Promise<void> {
-  return streamRequest('/continue', req, onChunk, onDone, onError, signal);
+/**
+ * 创建一个标准流式请求函数。
+ *
+ * 6 个 AI 端点（续写/改写/全文/对话/世界观）签名完全一致，
+ * 仅 endpoint 不同，通过工厂消除重复。
+ */
+function createStreamFn<TReq>(endpoint: string) {
+  return (
+    req: TReq,
+    onChunk: OnStreamChunk,
+    onDone: OnStreamDone,
+    onError: OnStreamError,
+    signal?: AbortSignal,
+  ): Promise<void> => streamRequest(endpoint, req, onChunk, onDone, onError, signal);
 }
 
+/** 续写：在光标处或文末续写下文 */
+export const streamContinue = createStreamFn<ContinueRequest>('/continue');
+
 /** 改写/润色/扩写：对选中文本进行改写 */
-export function streamRewrite(
-  req: RewriteRequest,
-  onChunk: OnStreamChunk,
-  onDone: OnStreamDone,
-  onError: OnStreamError,
-  signal?: AbortSignal,
-): Promise<void> {
-  return streamRequest('/rewrite', req, onChunk, onDone, onError, signal);
-}
+export const streamRewrite = createStreamFn<RewriteRequest>('/rewrite');
+
+/** 全文生成：根据大纲生成整章正文 */
+export const streamFulltext = createStreamFn<FulltextRequest>('/fulltext');
+
+/** 角色对话生成 */
+export const streamDialogue = createStreamFn<DialogueRequest>('/dialogue');
+
+/** 世界观条目构建 */
+export const streamWorldview = createStreamFn<WorldviewRequest>('/worldview');
 
 /**
  * 生成章节大纲。
  *
  * 后端返回 SSE，每个 chunk 是 JSON 数组片段，需拼接后 JSON.parse。
- * 这里特殊处理：onChunk 收到的是原始片段字符串，onDone 收到完整 JSON 解析后的数组。
+ * onChunk 收到原始片段字符串，onDone 收到完整 JSON 解析后的数组。
  */
 export async function streamOutline(
   req: OutlineRequest,
@@ -160,37 +169,4 @@ export async function streamOutline(
     onError,
     signal,
   );
-}
-
-/** 全文生成：根据大纲生成整章正文 */
-export function streamFulltext(
-  req: FulltextRequest,
-  onChunk: OnStreamChunk,
-  onDone: OnStreamDone,
-  onError: OnStreamError,
-  signal?: AbortSignal,
-): Promise<void> {
-  return streamRequest('/fulltext', req, onChunk, onDone, onError, signal);
-}
-
-/** 角色对话生成 */
-export function streamDialogue(
-  req: DialogueRequest,
-  onChunk: OnStreamChunk,
-  onDone: OnStreamDone,
-  onError: OnStreamError,
-  signal?: AbortSignal,
-): Promise<void> {
-  return streamRequest('/dialogue', req, onChunk, onDone, onError, signal);
-}
-
-/** 世界观条目构建 */
-export function streamWorldview(
-  req: WorldviewRequest,
-  onChunk: OnStreamChunk,
-  onDone: OnStreamDone,
-  onError: OnStreamError,
-  signal?: AbortSignal,
-): Promise<void> {
-  return streamRequest('/worldview', req, onChunk, onDone, onError, signal);
 }

@@ -37,7 +37,7 @@ const DATA_DIR = path.resolve(__dirname, '..', '..', 'data');
 const DATA_FILE = path.join(DATA_DIR, 'models.json');
 
 /** 默认全部能力 */
-const DEFAULT_CAPABILITIES = ['continue', 'rewrite', 'polish', 'expand', 'outline', 'fulltext', 'dialogue', 'worldview'];
+export const DEFAULT_CAPABILITIES = ['continue', 'rewrite', 'polish', 'expand', 'outline', 'fulltext', 'dialogue', 'worldview'];
 
 /** 掩码 API Key，仅保留前 6 位 */
 function maskApiKey(key: string): string {

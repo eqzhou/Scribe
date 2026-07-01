@@ -12,7 +12,6 @@
  *   - 当 chapterId 为 null 时不执行保存
  *   - 通过返回的 saveNow 可立即清除 debounce 定时器并触发保存
  *   - 章节内容超过 100KB 时通过回调 onOversize 通知 UI
- *   - IndexedDB 不可用时降级写入 localStorage，保证内容不丢失
  */
 import { useCallback, useEffect, useRef } from 'react';
 import { useEditorStore } from '../stores/editorStore';
@@ -29,35 +28,6 @@ const RETRY_INTERVAL_MS = 5000;
 const MAX_ATTEMPTS = 3;
 /** 章节内容大小上限（字节），超出时提示用户 */
 const CONTENT_SIZE_LIMIT = 100 * 1024;
-/** localStorage 降级键前缀 */
-const FALLBACK_KEY_PREFIX = 'scribe:fallback:chapter:';
-
-/**
- * 检测 IndexedDB 是否可用（部分隐私模式下 indexedDB 存在但 open 会抛错）。
- * 通过尝试打开一个临时数据库来判定。
- */
-function isIndexedDBAvailable(): boolean {
-  try {
-    if (typeof indexedDB === 'undefined') return false;
-    // 触发 Dexie 底层打开（不等待），仅检测是否抛同步异常
-    return typeof indexedDB.open === 'function';
-  } catch {
-    return false;
-  }
-}
-
-/**
- * 将章节内容降级写入 localStorage。
- * 仅在 IndexedDB 不可用时调用，作为最后兜底，避免内容丢失。
- */
-function writeToLocalStorageFallback(chapterId: string, content: string): void {
-  try {
-    const key = `${FALLBACK_KEY_PREFIX}${chapterId}`;
-    localStorage.setItem(key, JSON.stringify({ content, savedAt: Date.now() }));
-  } catch {
-    // localStorage 也满或被禁用：无能为力，忽略
-  }
-}
 
 /**
  * 自动保存章节内容。
@@ -83,8 +53,6 @@ export function useAutoSave(chapterId: string | null, content: string) {
   const inFlightPromiseRef = useRef<Promise<void> | null>(null);
   // pending 标志：保存进行中又有新内容进来，需在当前保存结束后再保存一次
   const pendingRef = useRef(false);
-  // 配额降级提示去重（避免每次保存都 toast）
-  const degradedWarnedRef = useRef(false);
   // 当前会话的 WritingLog ID（同一会话内多次保存更新同一条）
   const sessionLogIdRef = useRef<string | null>(null);
   // 当前会话的累计字数增量（用于会话内累加）
@@ -118,15 +86,6 @@ export function useAutoSave(chapterId: string | null, content: string) {
       const text = contentRef.current;
       // chapterId 为 null 时跳过保存
       if (!id) return;
-
-      // IndexedDB 不可用：直接降级到 localStorage
-      if (!isIndexedDBAvailable()) {
-        writeToLocalStorageFallback(id, text);
-        setSaveStatus('saved');
-        setLastSavedAt(Date.now());
-        retryCountRef.current = 0;
-        return;
-      }
 
       setSaveStatus('saving');
       try {
@@ -190,35 +149,13 @@ export function useAutoSave(chapterId: string | null, content: string) {
         setLastSavedAt(Date.now());
         retryCountRef.current = 0;
       } catch (err) {
-        // 判定是否为 IndexedDB 不可用类错误（QuotaExceeded / InvalidStateError 等）
-        const msg = err instanceof Error ? err.message : String(err);
-        const isStorageError =
-          /quota|indexeddb|idbdatabase|invalidstate|dataclone/i.test(msg);
-        if (isStorageError) {
-          // 降级到 localStorage，避免数据丢失
-          writeToLocalStorageFallback(id, text);
-          setSaveStatus('saved');
-          setLastSavedAt(Date.now());
-          retryCountRef.current = 0;
-          // 通知用户存储空间不足（去重，避免反复提示）
-          if (!degradedWarnedRef.current) {
-            degradedWarnedRef.current = true;
-            useToastStore.getState().pushToast(
-              'warning',
-              '存储空间不足，已临时备份到本地，请尽快导出作品并清理空间',
-            );
-          }
-          return;
-        }
-
+        const message = err instanceof Error ? err.message : String(err);
         retryCountRef.current += 1;
         if (retryCountRef.current >= MAX_ATTEMPTS) {
-          // 3 次均失败：再尝试一次 localStorage 兜底，然后标记失败
-          writeToLocalStorageFallback(id, text);
           setSaveStatus('failed');
           useToastStore.getState().pushToast(
             'error',
-            '自动保存失败，内容已临时备份到本地，请检查存储或导出作品',
+            `自动保存失败：${message}。请检查浏览器存储状态或导出作品备份。`,
           );
         } else {
           // 安排 5 秒后重试
