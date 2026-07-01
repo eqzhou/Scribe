@@ -8,8 +8,11 @@
  * - 新建章节 / 卷宗按钮
  * - 选中章节高亮（对齐 editorStore.currentChapterId）
  * - 章节项显示大纲摘要（前 30 字）作为副标题
+ *
+ * 单个章节项的渲染与交互（拖拽手柄、状态菜单、删除按钮）已拆分至
+ * ./ChapterTree/SortableChapterItem。状态颜色/标签统一来自 ./constants。
  */
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   DndContext,
@@ -23,11 +26,9 @@ import {
 import {
   SortableContext,
   sortableKeyboardCoordinates,
-  useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { Plus, ChevronRight, BookPlus, FilePlus, Trash2, Check } from 'lucide-react';
+import { Plus, ChevronRight, BookPlus, FilePlus } from 'lucide-react';
 import { db } from '../../lib/db';
 import { chapterRepository, volumeRepository } from '../../lib/repositories';
 import { checkReferences } from '../../lib/referenceChecker';
@@ -36,43 +37,11 @@ import type { ImpactInfo } from '../../components/ui';
 import { useEditorStore, useToastStore } from '../../stores';
 import { cn } from '../../utils/cn';
 import { Button, ConfirmDialog } from '../../components/ui';
+import { CHAPTER_STATUS_CONFIG } from './constants';
+import { SortableChapterItem } from './ChapterTree/SortableChapterItem';
 
 export interface ChapterTreeProps {
   bookId: string;
-}
-
-/** 章节状态 → 圆点颜色 */
-const STATUS_DOT: Record<ChapterStatus, string> = {
-  draft: 'bg-secondary',
-  writing: 'bg-primary',
-  done: 'bg-moss',
-  archived: 'bg-muted-foreground/30',
-};
-
-/** 章节状态 → 中文标签 */
-const STATUS_LABEL: Record<ChapterStatus, string> = {
-  draft: '草稿',
-  writing: '写作中',
-  done: '已完成',
-  archived: '已归档',
-};
-
-/** 可切换的状态顺序（用于状态菜单展示） */
-const STATUS_ORDER: ChapterStatus[] = ['draft', 'writing', 'done', 'archived'];
-
-/** 大纲摘要最大字数 */
-const OUTLINE_SUMMARY_LENGTH = 30;
-
-/**
- * 获取章节大纲摘要（优先使用 outline，其次使用 summary，取前 30 字）
- */
-function getChapterOutlineSummary(chapter: Chapter): string {
-  const text = chapter.outline ?? chapter.summary ?? '';
-  if (!text) return '';
-  const firstLine = text.split('\n')[0] ?? text;
-  return firstLine.length > OUTLINE_SUMMARY_LENGTH
-    ? firstLine.slice(0, OUTLINE_SUMMARY_LENGTH) + '...'
-    : firstLine;
 }
 
 /**
@@ -220,7 +189,10 @@ export function ChapterTree({ bookId }: ChapterTreeProps) {
   const handleStatusChange = async (chapter: Chapter, newStatus: ChapterStatus): Promise<void> => {
     if (chapter.status === newStatus) return;
     await chapterRepository.update(chapter.id, { status: newStatus });
-    pushToast('success', `章节「${chapter.title}」已切换为「${STATUS_LABEL[newStatus]}」`);
+    pushToast(
+      'success',
+      `章节「${chapter.title}」已切换为「${CHAPTER_STATUS_CONFIG[newStatus].label}」`,
+    );
   };
 
   // 按卷宗分组（无卷宗的章节归入"未分卷"组）
@@ -369,140 +341,6 @@ export function ChapterTree({ bookId }: ChapterTreeProps) {
         }}
       />
     </aside>
-  );
-}
-
-/** 可拖拽的章节项 */
-interface SortableChapterItemProps {
-  chapter: Chapter;
-  active: boolean;
-  onClick: () => void;
-  onDelete: () => void;
-  onStatusChange: (status: ChapterStatus) => void;
-}
-
-function SortableChapterItem({ chapter, active, onClick, onDelete, onStatusChange }: SortableChapterItemProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: chapter.id,
-  });
-
-  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  // 点击外部关闭状态菜单
-  useEffect(() => {
-    if (!statusMenuOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setStatusMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [statusMenuOpen]);
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  const handleStatusDotClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setStatusMenuOpen((prev) => !prev);
-  };
-
-  const handleStatusSelect = (status: ChapterStatus) => {
-    onStatusChange(status);
-    setStatusMenuOpen(false);
-  };
-
-  const outlineSummary = getChapterOutlineSummary(chapter);
-
-  return (
-    <li ref={setNodeRef} style={style} className="group/chapter relative">
-      <button
-        type="button"
-        onClick={onClick}
-        {...attributes}
-        {...listeners}
-        className={cn(
-          'flex w-full items-start gap-2 rounded px-2 py-1.5 text-left pr-7',
-          'transition-colors duration-150',
-          active
-            ? 'bg-primary/12 text-primary'
-            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-          chapter.status === 'archived' && 'opacity-50',
-        )}
-      >
-        {/* 状态圆点 + 菜单 */}
-        <div className="relative mt-1" ref={menuRef}>
-          <button
-            type="button"
-            onClick={handleStatusDotClick}
-            className={cn(
-              'h-2 w-2 shrink-0 rounded-full transition-transform hover:scale-150',
-              STATUS_DOT[chapter.status],
-            )}
-            title={`${STATUS_LABEL[chapter.status]}（点击切换）`}
-            aria-label={`${STATUS_LABEL[chapter.status]}，点击切换状态`}
-          />
-          {/* 状态切换下拉菜单 */}
-          {statusMenuOpen && (
-            <div className="absolute left-1/2 top-full z-50 mt-1.5 w-28 -translate-x-1/2 rounded-lg border border-border bg-background py-1 shadow-lifted">
-              {STATUS_ORDER.map((status) => (
-                <button
-                  key={status}
-                  type="button"
-                  onClick={() => handleStatusSelect(status)}
-                  className={cn(
-                    'flex w-full items-center gap-2 px-2.5 py-1.5 text-left transition-colors hover:bg-muted',
-                    chapter.status === status ? 'text-foreground' : 'text-muted-foreground',
-                  )}
-                >
-                  <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', STATUS_DOT[status])} />
-                  <span className="flex-1 text-[11px]">{STATUS_LABEL[status]}</span>
-                  {chapter.status === status && (
-                    <Check className="h-3 w-3 text-moss" aria-hidden="true" />
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">{chapter.title}</span>
-          {outlineSummary && (
-            <span
-              className={cn(
-                'mt-0.5 block truncate text-[12px]',
-                active ? 'text-primary' : 'text-muted-foreground',
-              )}
-            >
-              {outlineSummary}
-            </span>
-          )}
-        </div>
-        {chapter.wordCount > 0 && (
-          <span className="mt-0.5 shrink-0 font-mono text-[12px] text-muted-foreground">
-            {(chapter.wordCount / 1000).toFixed(1)}k
-          </span>
-        )}
-      </button>
-      {/* 删除按钮（悬停时显示） */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete();
-        }}
-        title="删除章节"
-        aria-label={`删除章节「${chapter.title}」`}
-        className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground opacity-0 transition-all hover:bg-primary/10 hover:text-primary focus-visible:opacity-100 group-hover/chapter:opacity-100"
-      >
-        <Trash2 className="h-3 w-3" aria-hidden="true" />
-      </button>
-    </li>
   );
 }
 

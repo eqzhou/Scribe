@@ -24,3 +24,9 @@ export type { ConfirmDialogProps, ImpactInfo, ImpactDetail } from './ConfirmDial
 
 export { Skeleton, SkeletonCard, SkeletonGrid } from './Skeleton';
 export type { SkeletonProps, SkeletonCardProps, SkeletonGridProps } from './Skeleton';
+
+export { TagInput } from './TagInput';
+export type { TagInputProps } from './TagInput';
+
+export { EditModalFooter } from './EditModalFooter';
+export type { EditModalFooterProps } from './EditModalFooter';

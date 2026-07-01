@@ -3,16 +3,14 @@
  *
  * 基于 Modal（宽度 800px）实现，承载：
  * - 标题输入
- * - 富文本内容（TipTap 编辑器：StarterKit + SceneDivider）
- * - 标签管理（输入回车添加，点击 x 删除）
- * - 关联角色（多选 checkbox 列表）
- * - 关联场景（多选 checkbox 列表）
- * - 保存：调用 worldviewRepository.create / update，并双向同步关联实体的数组字段
- * - 删除：ConfirmDialog 显示影响范围（关联角色与场景数）
+ * - 富文本内容（TipTap 编辑器：StarterKit + SceneDivider），工具栏由 EntryEditorToolbar 承载
+ * - 标签管理：复用通用 TagInput 组件
+ * - 关联角色 / 关联场景：双栏 checkbox 列表由 WorldviewRelationsSection 承载
+ * - 保存：调用 worldviewRepository.create / update，并通过 syncWorldviewRelations 双向同步关联实体
+ * - 删除：复用 useDeleteWithImpact Hook + EditModalFooter 通用底部操作区与确认弹窗
  */
 import { useEffect, useState, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { X, Trash2 } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { SceneDivider } from '../editor/nodes/SceneDivider';
@@ -22,22 +20,22 @@ import {
   characterRepository,
   sceneRepository,
 } from '../../lib/repositories';
-import { checkReferences } from '../../lib/referenceChecker';
+import { syncWorldviewRelations } from '../../lib/relationSync';
+import { useDeleteWithImpact } from '../../hooks/useDeleteWithImpact';
 import type {
   WorldviewEntry,
   WorldviewCategory,
   Character,
   Scene,
 } from '../../types';
-import type { ImpactInfo } from '../../components/ui';
-import { cn } from '../../utils/cn';
 import {
   Modal,
-  Button,
   Input,
-  Tag,
-  ConfirmDialog,
+  TagInput,
+  EditModalFooter,
 } from '../../components/ui';
+import { EntryEditorToolbar } from './EntryEditorToolbar';
+import { WorldviewRelationsSection } from './WorldviewRelationsSection';
 
 export interface EntryEditorProps {
   /** 是否打开 */
@@ -110,12 +108,13 @@ export function EntryEditor({
     const html = editor?.getHTML() ?? '';
     setForm((prev) => ({ ...prev, content: html }));
   }, [editor]);
-  const [tagInput, setTagInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [deleteImpact, setDeleteImpact] = useState<ImpactInfo | null>(null);
+
+  // 删除确认流程：复用通用 Hook（弹窗开关 + 引用影响检测）
+  const { confirmOpen, deleteImpact, requestDelete, cancelDelete } =
+    useDeleteWithImpact();
 
   // 实时监听当前作品的角色与场景，供关联选择
   const characters = useLiveQuery(
@@ -150,9 +149,7 @@ export function EntryEditor({
         editor.commands.setContent('', { emitUpdate: false });
       }
     }
-    setTagInput('');
     setError(null);
-    setDeleteImpact(null);
   }, [open, entry, editor]);
 
   // 编辑器内容更新监听
@@ -170,26 +167,6 @@ export function EntryEditor({
     value: EntryFormState[K],
   ): void => {
     setForm((prev) => ({ ...prev, [key]: value }));
-  };
-
-  /** 添加标签：回车触发，去重并清空输入 */
-  const handleTagAdd = (): void => {
-    const value = tagInput.trim();
-    if (!value) return;
-    if (form.tags.includes(value)) {
-      setTagInput('');
-      return;
-    }
-    updateField('tags', [...form.tags, value]);
-    setTagInput('');
-  };
-
-  /** 删除标签 */
-  const handleTagRemove = (tag: string): void => {
-    updateField(
-      'tags',
-      form.tags.filter((t) => t !== tag),
-    );
   };
 
   /** 切换角色关联 */
@@ -233,7 +210,7 @@ export function EntryEditor({
         : await worldviewRepository.create(payload);
 
       // 双向同步关联实体（角色 / 场景）
-      await syncRelations(
+      await syncWorldviewRelations(
         saved.id,
         entry?.relatedCharacterIds ?? [],
         form.relatedCharacterIds,
@@ -248,15 +225,6 @@ export function EntryEditor({
     } finally {
       setSubmitting(false);
     }
-  };
-
-  /** 触发删除：先检测引用影响 */
-  const handleDelete = async (): Promise<void> => {
-    if (!entry) return;
-    setConfirmOpen(true);
-    setDeleteImpact(null);
-    const impact = await checkReferences('worldview', entry.id, bookId);
-    setDeleteImpact(impact);
   };
 
   /** 确认删除：删除条目并清理关联实体的反向引用 */
@@ -308,385 +276,86 @@ export function EntryEditor({
       setError(err instanceof Error ? err.message : '删除失败');
     } finally {
       setDeleting(false);
+      cancelDelete();
     }
   };
 
   const title = entry ? '编辑条目' : '新建条目';
 
   return (
-    <>
-      <Modal open={open} onClose={onClose} title={title} width="800px">
-        <div className="flex flex-col gap-4">
-          {/* 标题 */}
-          <Input
-            label="条目标题"
-            name="title"
-            value={form.title}
-            onChange={(e) => updateField('title', e.target.value)}
-            placeholder="如：昆仑雪顶"
-            required
-          />
+    <Modal open={open} onClose={onClose} title={title} width="800px">
+      <div className="flex flex-col gap-4">
+        {/* 标题 */}
+        <Input
+          label="条目标题"
+          name="title"
+          value={form.title}
+          onChange={(e) => updateField('title', e.target.value)}
+          placeholder="如：昆仑雪顶"
+          required
+        />
 
-          {/* 内容（TipTap 富文本） */}
-          <div className="flex flex-col">
-            <label className="mb-1.5 block font-serif text-sm text-foreground">
-              条目内容
-            </label>
-            {/* 富文本工具栏 */}
-            <div className="mb-1.5 flex items-center gap-1 rounded-t border border-border bg-muted px-2 py-1.5">
-              <button
-                type="button"
-                onClick={() => editor?.chain().focus().toggleBold().run()}
-                className={cn(
-                  'rounded px-2 py-0.5 text-xs transition-colors',
-                  editor?.isActive('bold')
-                    ? 'bg-primary/15 text-primary'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
-                aria-label="加粗"
-              >
-                B
-              </button>
-              <button
-                type="button"
-                onClick={() => editor?.chain().focus().toggleItalic().run()}
-                className={cn(
-                  'rounded px-2 py-0.5 text-xs italic transition-colors',
-                  editor?.isActive('italic')
-                    ? 'bg-primary/15 text-primary'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
-                aria-label="斜体"
-              >
-                I
-              </button>
-              <button
-                type="button"
-                onClick={() => editor?.chain().focus().toggleBlockquote().run()}
-                className={cn(
-                  'rounded px-2 py-0.5 text-xs transition-colors',
-                  editor?.isActive('blockquote')
-                    ? 'bg-primary/15 text-primary'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
-                aria-label="引文块"
-              >
-                ❝
-              </button>
-              <div className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-              <button
-                type="button"
-                onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
-                className={cn(
-                  'rounded px-2 py-0.5 text-xs transition-colors',
-                  editor?.isActive('heading', { level: 2 })
-                    ? 'bg-primary/15 text-primary'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
-                aria-label="二级标题"
-              >
-                H2
-              </button>
-              <button
-                type="button"
-                onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}
-                className={cn(
-                  'rounded px-2 py-0.5 text-xs transition-colors',
-                  editor?.isActive('heading', { level: 3 })
-                    ? 'bg-primary/15 text-primary'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
-                aria-label="三级标题"
-              >
-                H3
-              </button>
-              <div className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-              <button
-                type="button"
-                onClick={() => editor?.chain().focus().insertContent({ type: 'sceneDivider' }).run()}
-                className="rounded px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                aria-label="插入场景分隔符"
-                title="场景分隔符 (Ctrl+Enter)"
-              >
-                §
-              </button>
-            </div>
-            {/* 编辑器主体 */}
-            <div className="min-h-[200px] rounded-b border border-t-0 border-border bg-background px-3 py-2">
-              <EditorContent editor={editor} />
-            </div>
-          </div>
-
-          {/* 标签管理 */}
-          <div className="flex flex-col">
-            <label className="mb-1.5 block font-serif text-sm text-foreground">
-              标签
-            </label>
-            <div className="flex flex-wrap items-center gap-2 rounded border border-border bg-muted px-2 py-2">
-              {form.tags.map((tag) => (
-                <Tag key={tag} variant="secondary" size="sm">
-                  <span className="inline-flex items-center gap-1">
-                    {tag}
-                    <button
-                      type="button"
-                      onClick={() => handleTagRemove(tag)}
-                      className="text-secondary transition-colors hover:text-primary"
-                      aria-label={`删除标签 ${tag}`}
-                    >
-                      <X className="h-3 w-3" aria-hidden="true" />
-                    </button>
-                  </span>
-                </Tag>
-              ))}
-              <input
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleTagAdd();
-                  }
-                }}
-                placeholder={form.tags.length === 0 ? '输入标签后回车添加' : '继续添加…'}
-                className={cn(
-                  'flex-1 min-w-[120px] bg-transparent px-1 py-0.5',
-                  'font-serif text-sm text-foreground',
-                  'placeholder:text-muted-foreground focus:outline-none',
-                )}
-              />
-            </div>
-          </div>
-
-          {/* 关联角色与场景：双栏 checkbox 列表 */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* 关联角色 */}
-            <div className="flex flex-col">
-              <label className="mb-1.5 block font-serif text-sm text-foreground">
-                关联角色
-              </label>
-              <div className="max-h-44 overflow-y-auto rounded border border-border bg-muted px-2 py-1.5">
-                {characters.length === 0 ? (
-                  <p className="px-1 py-2 text-xs text-muted-foreground">
-                    当前作品尚无角色
-                  </p>
-                ) : (
-                  <ul className="flex flex-col gap-0.5">
-                    {characters.map((c) => {
-                      const checked = form.relatedCharacterIds.includes(c.id);
-                      return (
-                        <li key={c.id}>
-                          <label
-                            className={cn(
-                              'flex cursor-pointer items-center gap-2 rounded px-1.5 py-1',
-                              'font-serif text-sm transition-colors',
-                              checked
-                                ? 'bg-primary/8 text-foreground'
-                                : 'text-muted-foreground hover:bg-muted',
-                            )}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleCharacter(c.id)}
-                              className="h-3.5 w-3.5 accent-primary"
-                            />
-                            <span className="font-medium">{c.name}</span>
-                            {c.alias && (
-                              <span className="text-[11px] text-secondary">
-                                · {c.alias}
-                              </span>
-                            )}
-                          </label>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            </div>
-
-            {/* 关联场景 */}
-            <div className="flex flex-col">
-              <label className="mb-1.5 block font-serif text-sm text-foreground">
-                关联场景
-              </label>
-              <div className="max-h-44 overflow-y-auto rounded border border-border bg-muted px-2 py-1.5">
-                {scenes.length === 0 ? (
-                  <p className="px-1 py-2 text-xs text-muted-foreground">
-                    当前作品尚无场景
-                  </p>
-                ) : (
-                  <ul className="flex flex-col gap-0.5">
-                    {scenes.map((s) => {
-                      const checked = form.relatedSceneIds.includes(s.id);
-                      return (
-                        <li key={s.id}>
-                          <label
-                            className={cn(
-                              'flex cursor-pointer items-center gap-2 rounded px-1.5 py-1',
-                              'font-serif text-sm transition-colors',
-                              checked
-                                ? 'bg-moss/10 text-foreground'
-                                : 'text-muted-foreground hover:bg-muted',
-                            )}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleScene(s.id)}
-                              className="h-3.5 w-3.5 accent-primary"
-                            />
-                            <span className="font-medium">{s.name}</span>
-                            {s.atmosphere.length > 0 && (
-                              <span className="text-[11px] text-moss">
-                                · {s.atmosphere.slice(0, 2).join(' / ')}
-                              </span>
-                            )}
-                          </label>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* 错误提示 */}
-          {error && (
-            <p className="rounded border border-primary/40 bg-primary/8 px-3 py-2 text-xs text-primary">
-              {error}
-            </p>
-          )}
-
-          {/* 操作区 */}
-          <div className="flex items-center justify-between gap-2 pt-2">
-            {/* 左侧：删除（仅编辑态） */}
-            <div>
-              {entry && (
-                <Button
-                  variant="ghost"
-                  size="md"
-                  icon={<Trash2 className="h-4 w-4" aria-hidden="true" />}
-                  onClick={() => void handleDelete()}
-                  disabled={submitting || deleting}
-                  className="text-primary hover:bg-primary hover:text-primary-foreground"
-                >
-                  删除条目
-                </Button>
-              )}
-            </div>
-            {/* 右侧：取消 + 保存 */}
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="md"
-                onClick={onClose}
-                disabled={submitting || deleting}
-              >
-                取消
-              </Button>
-              <Button
-                variant="primary"
-                size="md"
-                onClick={handleSubmit}
-                loading={submitting}
-                disabled={deleting}
-              >
-                {entry ? '保存修改' : '创建条目'}
-              </Button>
-            </div>
+        {/* 内容（TipTap 富文本） */}
+        <div className="flex flex-col">
+          <label className="mb-1.5 block font-serif text-sm text-foreground">
+            条目内容
+          </label>
+          {/* 富文本工具栏 */}
+          <EntryEditorToolbar editor={editor} />
+          {/* 编辑器主体 */}
+          <div className="min-h-[200px] rounded-b border border-t-0 border-border bg-background px-3 py-2">
+            <EditorContent editor={editor} />
           </div>
         </div>
-      </Modal>
 
-      {/* 删除确认 */}
-      <ConfirmDialog
-        open={confirmOpen}
-        onClose={() => {
-          if (deleting) return;
-          setConfirmOpen(false);
-          setDeleteImpact(null);
-        }}
-        onConfirm={handleDeleteConfirm}
-        title="删除条目"
-        message={`确认永久删除条目「${entry?.title ?? ''}」？此操作不可撤销。`}
-        impactDetails={deleteImpact}
-        confirmText="永久删除"
-        danger
-      />
-    </>
-  );
-}
+        {/* 标签管理 */}
+        <TagInput
+          tags={form.tags}
+          onChange={(tags) => updateField('tags', tags)}
+          label="标签"
+        />
 
-/**
- * 双向同步关联实体：
- * - 角色：将 entry.id 写入/移出 character.relatedWorldviewIds
- * - 场景：将 entry.id 写入/移出 scene.worldviewEntryIds
- *
- * @param entryId 当前条目 ID
- * @param oldCharIds 旧的关联角色集合
- * @param newCharIds 新的关联角色集合
- * @param oldSceneIds 旧的关联场景集合
- * @param newSceneIds 新的关联场景集合
- */
-async function syncRelations(
-  entryId: string,
-  oldCharIds: string[],
-  newCharIds: string[],
-  oldSceneIds: string[],
-  newSceneIds: string[],
-): Promise<void> {
-  const addedChars = newCharIds.filter((id) => !oldCharIds.includes(id));
-  const removedChars = oldCharIds.filter((id) => !newCharIds.includes(id));
-  const addedScenes = newSceneIds.filter((id) => !oldSceneIds.includes(id));
-  const removedScenes = oldSceneIds.filter((id) => !newSceneIds.includes(id));
+        {/* 关联角色与场景：双栏 checkbox 列表 */}
+        <WorldviewRelationsSection
+          characters={characters}
+          scenes={scenes}
+          selectedCharacterIds={form.relatedCharacterIds}
+          selectedSceneIds={form.relatedSceneIds}
+          onToggleCharacter={toggleCharacter}
+          onToggleScene={toggleScene}
+        />
 
-  await db.transaction(
-    'rw',
-    [db.characters, db.scenes],
-    async () => {
-      // 角色：新增引用
-      for (const id of addedChars) {
-        const c = await db.characters.get(id);
-        if (!c) continue;
-        const set = new Set(c.relatedWorldviewIds ?? []);
-        set.add(entryId);
-        await characterRepository.update(c.id, {
-          relatedWorldviewIds: Array.from(set),
-        });
-      }
-      // 角色：移除引用
-      for (const id of removedChars) {
-        const c = await db.characters.get(id);
-        if (!c) continue;
-        const next = (c.relatedWorldviewIds ?? []).filter(
-          (x) => x !== entryId,
-        );
-        await characterRepository.update(c.id, {
-          relatedWorldviewIds: next,
-        });
-      }
-      // 场景：新增引用
-      for (const id of addedScenes) {
-        const s = await db.scenes.get(id);
-        if (!s) continue;
-        const set = new Set(s.worldviewEntryIds);
-        set.add(entryId);
-        await sceneRepository.update(s.id, {
-          worldviewEntryIds: Array.from(set),
-        });
-      }
-      // 场景：移除引用
-      for (const id of removedScenes) {
-        const s = await db.scenes.get(id);
-        if (!s) continue;
-        const next = s.worldviewEntryIds.filter((x) => x !== entryId);
-        await sceneRepository.update(s.id, {
-          worldviewEntryIds: next,
-        });
-      }
-    },
+        {/* 错误提示 */}
+        {error && (
+          <p className="rounded border border-primary/40 bg-primary/8 px-3 py-2 text-xs text-primary">
+            {error}
+          </p>
+        )}
+
+        {/* 底部操作区 + 删除确认弹窗 */}
+        <EditModalFooter
+          isEditing={Boolean(entry)}
+          deleteLabel="删除条目"
+          submitLabel={entry ? '保存修改' : '创建条目'}
+          submitting={submitting}
+          deleting={deleting}
+          onCancel={onClose}
+          onSubmit={handleSubmit}
+          onDelete={() => {
+            if (!entry) return;
+            void requestDelete('worldview', entry.id, bookId);
+          }}
+          onConfirmDelete={handleDeleteConfirm}
+          onCancelDelete={() => {
+            if (!deleting) cancelDelete();
+          }}
+          confirmOpen={confirmOpen}
+          deleteImpact={deleteImpact}
+          deleteTitle="删除条目"
+          deleteMessage={`确认永久删除条目「${entry?.title ?? ''}」？此操作不可撤销。`}
+        />
+      </div>
+    </Modal>
   );
 }
 

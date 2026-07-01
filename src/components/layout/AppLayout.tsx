@@ -7,6 +7,7 @@
  * 主区使用 AnimatePresence + Framer Motion 实现路由切换过渡（淡入 + Y 轴位移）。
  * 全局搜索面板在此挂载，覆盖所有路由。
  */
+import { Suspense } from 'react';
 import { useLocation, useOutlet } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import Sidebar from './Sidebar';
@@ -14,8 +15,18 @@ import Topbar from './Topbar';
 import MobileTabBar from './MobileTabBar';
 import GlobalSearch from '../GlobalSearch';
 import { ToastContainer } from '../feedback/Toast';
+import { Skeleton } from '../ui/Skeleton';
 import { useKeyboardShortcuts } from '../../hooks';
 import { useToastStore } from '../../stores';
+
+/** 路由懒加载时的占位组件 */
+function PageLoading() {
+  return (
+    <div className="flex h-full items-center justify-center p-8">
+      <Skeleton width="100%" height="100%" className="max-h-24" />
+    </div>
+  );
+}
 
 export default function AppLayout() {
   const location = useLocation();
@@ -39,7 +50,7 @@ export default function AppLayout() {
               transition={{ duration: 0.2, ease: 'easeOut' }}
               className="h-full"
             >
-              {element}
+              <Suspense fallback={<PageLoading />}>{element}</Suspense>
             </motion.div>
           </AnimatePresence>
         </main>

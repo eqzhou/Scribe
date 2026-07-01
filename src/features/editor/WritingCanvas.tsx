@@ -8,120 +8,46 @@
  * - 章节状态联动：编辑 done 章节时提示回退
  * - AI 工具栏：续写 / 改写 / 润色 / 扩写 / 全文生成（流式插入 ghost 文本，Tab 接受 / Esc 拒绝）
  * - 大纲面板：章节大纲编辑器，debounce 自动保存
+ *
+ * 视图层拆分：
+ * - EditorTopBar：顶栏（标题 / 大纲按钮 / 状态徽章 / 字数 / 容量 / 保存 / 章节操作）
+ * - EditorToolbar：格式与 AI 工具栏
+ * - OutlinePanel：右侧大纲抽屉
+ * - useSaveStatusDisplay：保存状态徽章展示
+ * - useAIEditorActions：AI 写作操作与对应弹窗状态
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import {
-  Bold,
-  Italic,
-  Quote,
-  Minus,
-  AtSign,
-  Hash,
-  Save,
-  Check,
-  AlertCircle,
-  Loader2,
-  Sparkles,
-  Wand2,
-  Feather,
-  Expand,
-  Archive,
-  RotateCcw,
-  Download,
-  FileText,
-  HardDrive,
-  BookOpen,
-  X,
-} from 'lucide-react';
+import { Download, FileText } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../lib/db';
 import { chapterRepository } from '../../lib/repositories';
 import { downloadJson } from '../../lib/exporter';
-import type { Chapter, ChapterStatus, Character, WorldviewEntry } from '../../types';
+import type { Chapter, Character, WorldviewEntry } from '../../types';
 import type { RewriteStyle } from '../../types/ai';
-import { useEditorStore, useBookStore, useAIStore, useToastStore } from '../../stores';
+import { useEditorStore, useBookStore, useToastStore } from '../../stores';
 import { useAutoSave } from '../../hooks';
-import { countWords, formatWordCount } from '../../utils/wordCount';
-import { cn } from '../../utils/cn';
+import { countWords } from '../../utils/wordCount';
+import { getContentSizeKB, getCapacityLevel } from '../../utils/contentSize';
 import { Modal, Button, ConfirmDialog } from '../../components/ui';
 import { SceneDivider } from './nodes/SceneDivider';
 import { CharacterMention } from './nodes/CharacterMention';
 import { WorldviewRef } from './nodes/WorldviewRef';
 import { AIGhostText } from './nodes/AIGhostText';
-import { executeContinue, executeRewrite, executeFulltextEditor } from '../../lib/aiTools';
+import { EditorTopBar } from './EditorTopBar';
+import { EditorToolbar } from './EditorToolbar';
+import { OutlinePanel } from './OutlinePanel';
+import { useSaveStatusDisplay } from './hooks/useSaveStatusDisplay';
+import { useAIEditorActions } from './hooks/useAIEditorActions';
 
 export interface WritingCanvasProps {
   chapter: Chapter;
   bookId: string;
 }
 
-/** 章节状态 → 中文标签 + 颜色 */
-const STATUS_BADGE: Record<ChapterStatus, { label: string; cls: string }> = {
-  draft: { label: '草稿', cls: 'bg-secondary/15 text-secondary' },
-  writing: { label: '写作中', cls: 'bg-primary/15 text-primary' },
-  done: { label: '已完成', cls: 'bg-moss/15 text-moss' },
-  archived: { label: '已归档', cls: 'bg-muted-foreground/15 text-muted-foreground' },
-};
-
-/** 内容容量等级 */
-type CapacityLevel = 'normal' | 'warning' | 'danger';
-
-/** 章节内容大小上限（字节） */
-const CONTENT_SIZE_LIMIT = 100 * 1024;
-/** 警告阈值（字节）：80KB */
-const CONTENT_WARNING_THRESHOLD = 80 * 1024;
-
 /** 大纲自动保存 debounce 间隔（毫秒） */
 const OUTLINE_DEBOUNCE_MS = 1000;
-
-/**
- * 计算章节内容大小（KB，保留 1 位小数）
- * 使用 UTF-16 码元估算：content.length * 2
- */
-function getContentSizeKB(content: string): number {
-  const bytes = content.length * 2;
-  return Math.round((bytes / 1024) * 10) / 10;
-}
-
-/**
- * 获取容量等级：normal / warning / danger
- */
-function getCapacityLevel(content: string): CapacityLevel {
-  const bytes = content.length * 2;
-  if (bytes > CONTENT_SIZE_LIMIT) return 'danger';
-  if (bytes > CONTENT_WARNING_THRESHOLD) return 'warning';
-  return 'normal';
-}
-
-/** 保存状态 → 显示配置 */
-function useSaveStatusDisplay() {
-  const saveStatus = useEditorStore((s) => s.saveStatus);
-  const lastSavedAt = useEditorStore((s) => s.lastSavedAt);
-  const [timeStr, setTimeStr] = useState('');
-
-  useEffect(() => {
-    if (saveStatus === 'saved' && lastSavedAt) {
-      const d = new Date(lastSavedAt);
-      const hh = String(d.getHours()).padStart(2, '0');
-      const mm = String(d.getMinutes()).padStart(2, '0');
-      setTimeStr(`${hh}:${mm}`);
-    }
-  }, [saveStatus, lastSavedAt]);
-
-  if (saveStatus === 'saving') {
-    return { icon: Loader2, text: '保存中…', cls: 'text-foreground', spin: true };
-  }
-  if (saveStatus === 'saved') {
-    return { icon: Check, text: `已保存于 ${timeStr}`, cls: 'text-moss', spin: false };
-  }
-  if (saveStatus === 'failed') {
-    return { icon: AlertCircle, text: '保存失败', cls: 'text-primary', spin: false };
-  }
-  return { icon: Save, text: '待保存', cls: 'text-muted-foreground', spin: false };
-}
 
 /**
  * 写作画布：TipTap 编辑器 + 顶栏 + 工具栏。
@@ -129,20 +55,14 @@ function useSaveStatusDisplay() {
 export function WritingCanvas({ chapter, bookId }: WritingCanvasProps) {
   const setUnsavedContent = useEditorStore((s) => s.setUnsavedContent);
   const saveStatus = useEditorStore((s) => s.saveStatus);
+  const lastSavedAt = useEditorStore((s) => s.lastSavedAt);
   const { currentBookId } = useBookStore();
-  const aiStatus = useAIStore((s) => s.status);
   const pushToast = useToastStore((s) => s.pushToast);
   const [title, setTitle] = useState(chapter.title);
   const [pickerOpen, setPickerOpen] = useState<'character' | 'worldview' | null>(null);
   const [notifiedDone, setNotifiedDone] = useState(false);
   const [content, setContent] = useState(chapter.content);
   const [editorReady, setEditorReady] = useState(false);
-  const [styleModalOpen, setStyleModalOpen] = useState<{
-    action: 'rewrite' | 'polish' | 'expand';
-    text: string;
-  } | null>(null);
-  const [fulltextModalOpen, setFulltextModalOpen] = useState(false);
-  const [fulltextOutline, setFulltextOutline] = useState('');
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [confirmRestore, setConfirmRestore] = useState(false);
   const [saveFailureOpen, setSaveFailureOpen] = useState(false);
@@ -381,103 +301,29 @@ export function WritingCanvas({ chapter, bookId }: WritingCanvasProps) {
     setPickerOpen(null);
   };
 
-  // ===== AI 写作操作 =====
-
-  const aiBusy = aiStatus === 'loading' || aiStatus === 'streaming';
-
-  /** 获取当前作品信息（用于 AI 上下文） */
-  const getBookInfo = async (): Promise<{ id: string; title: string; synopsis: string }> => {
-    const id = currentBookId ?? bookId;
-    const book = await db.books.get(id);
-    return {
-      id,
-      title: book?.title ?? '未命名作品',
-      synopsis: book?.synopsis ?? '',
-    };
-  };
-
-  /** AI 续写：在光标处续写下文 */
-  const handleAIContinue = async (): Promise<void> => {
-    if (!editor || aiBusy) return;
-    try {
-      const book = await getBookInfo();
-      await executeContinue(
-        editor,
-        book.id,
-        chapter.id,
-        book.title,
-        book.synopsis,
-      );
-    } catch {
-      // 错误已在 executeContinue 内通过 toast 提示
-    }
-  };
-
-  /** AI 改写/润色/扩写：需选中文本，弹出风格选择 */
-  const handleAIRewriteAction = (action: 'rewrite' | 'polish' | 'expand'): void => {
-    if (!editor || aiBusy) return;
-    const { from, to } = editor.state.selection;
-    const selectedText = editor.state.doc.textBetween(from, to, '\n');
-    if (!selectedText.trim()) {
-      useToastStore.getState().pushToast('warning', '请先选中要处理的文本');
-      return;
-    }
-    setStyleModalOpen({ action, text: selectedText });
-  };
-
-  /** 确认风格后执行改写 */
-  const handleConfirmRewrite = async (style: RewriteStyle | undefined): Promise<void> => {
-    if (!editor || !styleModalOpen) return;
-    const { action, text } = styleModalOpen;
-    setStyleModalOpen(null);
-    try {
-      const book = await getBookInfo();
-      await executeRewrite(
-        editor,
-        text,
-        action,
-        style,
-        book.id,
-        book.title,
-        book.synopsis,
-      );
-    } catch {
-      // 错误已提示
-    }
-  };
-
-  /** AI 全文生成：打开弹窗输入大纲 */
-  const handleAIFulltext = (): void => {
-    if (!editor || aiBusy) return;
-    setFulltextOutline(outlineText || '');
-    setFulltextModalOpen(true);
-  };
-
-  /** 确认大纲后执行全文生成 */
-  const handleConfirmFulltext = async (): Promise<void> => {
-    if (!editor) return;
-    setFulltextModalOpen(false);
-    try {
-      const book = await getBookInfo();
-      await executeFulltextEditor(
-        editor,
-        book.id,
-        chapter.id,
-        chapter.title,
-        fulltextOutline,
-        book.title,
-        book.synopsis,
-      );
-    } catch {
-      // 错误已在 executeFulltextEditor 内通过 toast 提示
-    }
-  };
-
-  /** 取消 AI 请求 */
-  const handleAICancel = (): void => {
-    useAIStore.getState().cancel();
-    editor?.commands.rejectGhostText();
-  };
+  // ===== AI 写作操作（由 useAIEditorActions hook 托管） =====
+  const {
+    aiBusy,
+    styleModalOpen,
+    setStyleModalOpen,
+    fulltextModalOpen,
+    setFulltextModalOpen,
+    fulltextOutline,
+    setFulltextOutline,
+    handleAIContinue,
+    handleAIRewriteAction,
+    handleConfirmRewrite,
+    handleAIFulltext,
+    handleConfirmFulltext,
+    handleAICancel,
+  } = useAIEditorActions({
+    editor,
+    bookId,
+    currentBookId,
+    chapterId: chapter.id,
+    chapterTitle: chapter.title,
+    outlineText,
+  });
 
   // 实时字数统计
   const wordCount = useMemo(() => countWords(content), [content]);
@@ -486,9 +332,7 @@ export function WritingCanvas({ chapter, bookId }: WritingCanvasProps) {
   const sizeKB = useMemo(() => getContentSizeKB(content), [content]);
   const capacityLevel = useMemo(() => getCapacityLevel(content), [content]);
 
-  const saveDisplay = useSaveStatusDisplay();
-  const SaveIcon = saveDisplay.icon;
-  const statusBadge = STATUS_BADGE[chapter.status];
+  const saveDisplay = useSaveStatusDisplay(saveStatus, lastSavedAt);
 
   // 容量徽章颜色
   const capacityBadgeCls =
@@ -509,172 +353,42 @@ export function WritingCanvas({ chapter, bookId }: WritingCanvasProps) {
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden bg-background/30">
       {/* 顶栏：标题 + 字数 + 状态 + 保存 */}
-      <div className="flex flex-shrink-0 items-center gap-4 border-b border-border/60 bg-background/75 backdrop-blur-md px-6 py-3 z-10 shadow-sm">
-        {/* 章节标题（可编辑，带有雅致焦点边框） */}
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={handleTitleBlur}
-          className="min-w-0 flex-1 bg-transparent font-serif text-base font-bold text-foreground border-b border-transparent focus:border-secondary/50 pb-0.5 outline-none transition-all placeholder:text-muted-foreground focus:outline-none"
-          placeholder="未命名章节"
-          aria-label="章节标题"
-        />
-
-        {/* 大纲按钮 */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setOutlineOpen(true)}
-          className={cn(
-            'text-foreground border-border hover:bg-muted rounded-md text-xs font-semibold py-1 shadow-sm',
-            outlineOpen && 'bg-primary/10 border-primary/40 text-primary',
-          )}
-          icon={<BookOpen className="h-3 w-3" aria-hidden="true" />}
-        >
-          大纲
-        </Button>
-
-        {/* 状态徽章 */}
-        <span
-          className={cn(
-            'rounded-full px-2.5 py-0.5 text-[12px] tracking-widest font-semibold border border-transparent shadow-sm scale-95',
-            statusBadge.cls,
-            chapter.status === 'done' ? 'border-moss/30' : chapter.status === 'writing' ? 'border-primary/30' : 'border-secondary/30'
-          )}
-        >
-          {statusBadge.label}
-        </span>
-
-        {/* 字数统计 */}
-        <span className="font-mono text-xs text-muted-foreground border-l border-border-soft/60 pl-3">
-          {formatWordCount(wordCount)} 字
-        </span>
-
-        {/* 容量显示徽章 */}
-        <span
-          className={cn(
-            'flex items-center gap-1 font-mono text-[12px] rounded-full px-2 py-0.5 border shadow-sm scale-95',
-            capacityBadgeCls,
-            capacityLevel === 'danger' && 'animate-pulse',
-          )}
-          title={capacityTooltip}
-        >
-          <HardDrive className="h-3 w-3" aria-hidden="true" />
-          {sizeKB} KB / 100KB
-        </span>
-
-        {/* 保存状态 */}
-        <span className={cn('flex items-center gap-1.5 font-mono text-[12px] border-l border-border-soft/60 pl-3', saveDisplay.cls)}>
-          <SaveIcon
-            className={cn('h-3.5 w-3.5', saveDisplay.spin && 'animate-spin')}
-            aria-hidden="true"
-          />
-          {saveDisplay.text}
-        </span>
-
-        {/* 标记完成按钮（仅 writing/draft 状态显示） */}
-        {(chapter.status === 'draft' || chapter.status === 'writing') && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setConfirmDone(true)}
-            className="text-moss border-moss/45 hover:bg-moss hover:text-white rounded-md text-xs font-semibold py-1 ml-2 shadow-sm"
-          >
-            标记完成
-          </Button>
-        )}
-
-        {/* 归档按钮（仅 done 状态显示） */}
-        {chapter.status === 'done' && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setConfirmArchive(true)}
-            className="text-muted-foreground border-border hover:bg-muted hover:text-foreground rounded-md text-xs font-semibold py-1 ml-2 shadow-sm"
-            icon={<Archive className="h-3 w-3" aria-hidden="true" />}
-          >
-            归档
-          </Button>
-        )}
-
-        {/* 恢复写作按钮（仅 archived 状态显示） */}
-        {chapter.status === 'archived' && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setConfirmRestore(true)}
-            className="text-primary border-primary/45 hover:bg-primary hover:text-white rounded-md text-xs font-semibold py-1 ml-2 shadow-sm"
-            icon={<RotateCcw className="h-3 w-3" aria-hidden="true" />}
-          >
-            恢复写作
-          </Button>
-        )}
-      </div>
+      <EditorTopBar
+        title={title}
+        onTitleChange={setTitle}
+        onTitleBlur={handleTitleBlur}
+        outlineOpen={outlineOpen}
+        onOutlineOpen={() => setOutlineOpen(true)}
+        status={chapter.status}
+        wordCount={wordCount}
+        sizeKB={sizeKB}
+        capacityLevel={capacityLevel}
+        capacityBadgeCls={capacityBadgeCls}
+        capacityTooltip={capacityTooltip}
+        saveDisplay={saveDisplay}
+        onMarkDone={() => setConfirmDone(true)}
+        onArchive={() => setConfirmArchive(true)}
+        onRestore={() => setConfirmRestore(true)}
+      />
 
       {/* 主体内容区：编辑器 + 大纲面板 */}
       <div className="flex flex-1 overflow-hidden">
         {/* 编辑器区域 */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* 工具栏 */}
-          <div className="flex flex-shrink-0 items-center gap-1.5 border-b border-border/50 bg-muted/25 backdrop-blur px-6 py-2 z-10 shadow-sm">
-            <ToolbarButton onClick={toggleBold} title="加粗 (Ctrl+B)" icon={Bold} />
-            <ToolbarButton onClick={toggleItalic} title="斜体 (Ctrl+I)" icon={Italic} />
-            <ToolbarButton onClick={toggleBlockquote} title="引文块 (Ctrl+Shift+K)" icon={Quote} />
-            <ToolbarButton onClick={insertDivider} title="场景分隔符 (Ctrl+Enter)" icon={Minus} />
-            <div className="mx-1.5 h-4 w-px bg-border/60" />
-            <ToolbarButton
-              onClick={() => setPickerOpen('character')}
-              title="插入角色提及"
-              icon={AtSign}
-            />
-            <ToolbarButton
-              onClick={() => setPickerOpen('worldview')}
-              title="插入世界观引用"
-              icon={Hash}
-            />
-            <div className="mx-1.5 h-4 w-px bg-border/60" />
-            {/* AI 写作工具组 */}
-            {aiBusy ? (
-              <button
-                type="button"
-                onClick={handleAICancel}
-                className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-2.5 py-1 text-[11px] text-primary hover:bg-primary/10 transition-all font-semibold"
-                aria-label="取消 AI 请求"
-              >
-                <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                取消生成
-              </button>
-            ) : (
-              <div className="flex items-center gap-1">
-                <ToolbarButton
-                  onClick={handleAIContinue}
-                  title="AI 续写（光标处续写下文）"
-                  icon={Sparkles}
-                />
-                <ToolbarButton
-                  onClick={() => handleAIRewriteAction('rewrite')}
-                  title="AI 改写（选中文本）"
-                  icon={Wand2}
-                />
-                <ToolbarButton
-                  onClick={() => handleAIRewriteAction('polish')}
-                  title="AI 润色（选中文本）"
-                  icon={Feather}
-                />
-                <ToolbarButton
-                  onClick={() => handleAIRewriteAction('expand')}
-                  title="AI 扩写（选中文本）"
-                  icon={Expand}
-                />
-                <ToolbarButton
-                  onClick={handleAIFulltext}
-                  title="AI 全文生成（根据大纲生成整章正文）"
-                  icon={FileText}
-                />
-              </div>
-            )}
-          </div>
+          <EditorToolbar
+            onToggleBold={toggleBold}
+            onToggleItalic={toggleItalic}
+            onToggleBlockquote={toggleBlockquote}
+            onInsertDivider={insertDivider}
+            onPickCharacter={() => setPickerOpen('character')}
+            onPickWorldview={() => setPickerOpen('worldview')}
+            aiBusy={aiBusy}
+            onAIContinue={handleAIContinue}
+            onAIRewriteAction={handleAIRewriteAction}
+            onAIFulltext={handleAIFulltext}
+            onAICancel={handleAICancel}
+          />
 
           {/* 编辑器区：模拟精致实体宣纸稿笺稿纸 */}
           <div className="flex-1 overflow-y-auto bg-muted/10 transition-all duration-300">
@@ -694,57 +408,14 @@ export function WritingCanvas({ chapter, bookId }: WritingCanvasProps) {
         </div>
 
         {/* 大纲面板 */}
-        <AnimatePresence initial={false}>
-          {outlineOpen && (
-            <motion.aside
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 280, opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
-              transition={{ duration: 0.25, ease: 'easeInOut' }}
-              className="flex-shrink-0 overflow-hidden border-l border-border bg-muted/50"
-            >
-              <div className="flex h-full w-[280px] flex-col">
-                {/* 大纲头部 */}
-                <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
-                  <span className="font-serif text-sm font-semibold tracking-wide text-foreground">
-                    章节大纲
-                  </span>
-                  <div className="flex items-center gap-1">
-                    {outlineSaving && (
-                      <span className="font-mono text-[12px] text-muted-foreground">
-                        保存中...
-                      </span>
-                    )}
-                    {outlineSaved && (
-                      <span className="font-mono text-[12px] text-moss">
-                        已保存
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setOutlineOpen(false)}
-                      className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                      aria-label="关闭大纲"
-                    >
-                      <X className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* 大纲编辑器 */}
-                <div className="flex-1 overflow-y-auto p-3">
-                  <textarea
-                    value={outlineText}
-                    onChange={(e) => setOutlineText(e.target.value)}
-                    placeholder="在此编写本章大纲...&#10;&#10;例如：&#10;1. 开场：主角在森林中迷路&#10;2. 发展：偶遇神秘老者&#10;3. 高潮：得知身世之谜&#10;4. 结尾：决定踏上旅程"
-                    className="h-full min-h-[400px] w-full resize-none rounded-lg border border-border bg-background px-3 py-2.5 font-serif text-sm text-foreground leading-relaxed placeholder:text-muted-foreground focus:border-secondary/50 focus:outline-none"
-                    aria-label="章节大纲"
-                  />
-                </div>
-              </div>
-            </motion.aside>
-          )}
-        </AnimatePresence>
+        <OutlinePanel
+          open={outlineOpen}
+          outlineText={outlineText}
+          onOutlineTextChange={setOutlineText}
+          onClose={() => setOutlineOpen(false)}
+          outlineSaving={outlineSaving}
+          outlineSaved={outlineSaved}
+        />
       </div>
 
       {/* 角色选择弹窗 */}
@@ -978,29 +649,6 @@ export function WritingCanvas({ chapter, bookId }: WritingCanvasProps) {
         </div>
       </Modal>
     </div>
-  );
-}
-
-/** 工具栏按钮 */
-interface ToolbarButtonProps {
-  onClick: () => void;
-  title: string;
-  icon: typeof Bold;
-}
-
-function ToolbarButton({ onClick, title, icon: Icon }: ToolbarButtonProps) {
-  return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      title={title}
-      aria-label={title}
-      whileHover={{ scale: 1.1, translateY: -1 }}
-      whileTap={{ scale: 0.95 }}
-      className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-    >
-      <Icon className="h-4 w-4" aria-hidden="true" />
-    </motion.button>
   );
 }
 

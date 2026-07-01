@@ -7,21 +7,24 @@
  * - 各模块支持子路由参数（如 /characters/:id、/worldview/:categoryId/:entryId 等）
  *
  * 路由采用 createBrowserRouter + RouterProvider。
+ * 页面组件通过 React.lazy 懒加载，Suspense 边界挂在 AppLayout 的 outlet 处。
  * 全局快捷键 useKeyboardShortcuts 在 AppLayout（Router 上下文内）注册，
  * 因其内部使用 useNavigate，必须在 RouterProvider 提供的上下文中调用。
  */
+import { lazy } from 'react';
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
-import DashboardPage from './pages/DashboardPage';
-import ProjectsPage from './pages/ProjectsPage';
-import WorldviewPage from './pages/WorldviewPage';
-import CharactersPage from './pages/CharactersPage';
-import PlotPage from './pages/PlotPage';
-import ScenesPage from './pages/ScenesPage';
-import SceneDetailPage from './pages/SceneDetailPage';
-import EditorPage from './pages/EditorPage';
-import InspirationPage from './pages/InspirationPage';
-import SettingsPage from './pages/SettingsPage';
+
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
+const WorldviewPage = lazy(() => import('./pages/WorldviewPage'));
+const CharactersPage = lazy(() => import('./pages/CharactersPage'));
+const PlotPage = lazy(() => import('./pages/PlotPage'));
+const ScenesPage = lazy(() => import('./pages/ScenesPage'));
+const SceneDetailPage = lazy(() => import('./pages/SceneDetailPage'));
+const EditorPage = lazy(() => import('./pages/EditorPage'));
+const InspirationPage = lazy(() => import('./pages/InspirationPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 const router = createBrowserRouter([
   {
