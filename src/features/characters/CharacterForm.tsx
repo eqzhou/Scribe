@@ -662,7 +662,7 @@ export function CharacterForm({
                     <button
                       type="button"
                       onClick={() => handleTagRemove(tag)}
-                      className="text-secondary/70 transition-colors hover:text-primary"
+                      className="text-secondary transition-colors hover:text-primary"
                       aria-label={`删除标签 ${tag}`}
                     >
                       <X className="h-3 w-3" aria-hidden="true" />
@@ -719,7 +719,7 @@ export function CharacterForm({
                               form.relatedWorldviewIds.filter((id) => id !== wvId),
                             )
                           }
-                          className="text-secondary/70 transition-colors hover:text-primary"
+                          className="text-secondary transition-colors hover:text-primary"
                           aria-label={`移除关联 ${wv.title}`}
                         >
                           <X className="h-3 w-3" aria-hidden="true" />

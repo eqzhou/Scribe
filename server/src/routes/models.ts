@@ -17,6 +17,8 @@ import {
   getActiveModelId,
 } from '../services/modelStore.js';
 
+const DEFAULT_CAPABILITIES = ['continue', 'rewrite', 'polish', 'expand', 'outline', 'fulltext', 'dialogue', 'worldview'];
+
 const router = Router();
 
 // 列出所有模型
@@ -47,7 +49,9 @@ router.post('/', (req: Request, res: Response) => {
     const isDefault = Boolean(body.isDefault);
     const temperature = Number(body.temperature ?? 0.7);
     const maxTokens = Number(body.maxTokens ?? 4096);
-    const capabilities = Array.isArray(body.capabilities) ? body.capabilities as string[] : ['continue', 'rewrite', 'polish', 'expand', 'outline', 'fulltext', 'dialogue', 'worldview'];
+    const capabilities = Array.isArray(body.capabilities)
+      ? body.capabilities as string[]
+      : DEFAULT_CAPABILITIES;
 
     if (!name || !modelId || !baseUrl) {
       res.status(400).json({ error: '名称、模型 ID、API 地址为必填项' });
@@ -101,16 +105,21 @@ router.delete('/:id', (req: Request, res: Response) => {
 });
 
 // 设为激活默认模型
-router.post('/:id/activate', (req: Request, res: Response) => {
-  const ok = setActiveModel(req.params.id);
+router.post('/:id/activate', (_req: Request, res: Response) => {
+  const ok = setActiveModel(_req.params.id);
   if (!ok) { res.status(400).json({ error: '无法激活该模型' }); return; }
   res.json({ ok: true });
 });
 
 // 测试连通性
 router.post('/:id/test', async (req: Request, res: Response) => {
-  const result = await testModel(req.params.id);
-  res.json(result);
+  try {
+    const result = await testModel(req.params.id);
+    res.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '测试失败';
+    res.status(500).json({ ok: false, message });
+  }
 });
 
 export { router as modelRouter };

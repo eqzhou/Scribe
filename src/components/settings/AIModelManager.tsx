@@ -344,7 +344,7 @@ export function AIModelManager() {
       <div className="space-y-2">
         {!loading && sortedModels.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-muted/30 px-6 py-10 text-center">
-            <Sparkles className="mx-auto h-8 w-8 text-muted-foreground/60" />
+            <Sparkles className="mx-auto h-8 w-8 text-muted-foreground" />
             <p className="mt-3 font-serif text-sm text-foreground">尚未添加大模型</p>
             <p className="mt-1 text-xs text-muted-foreground">
               点击右上角「添加模型」配置你的第一个 AI 模型
@@ -451,7 +451,7 @@ export function AIModelManager() {
                         ? 'text-warning'
                         : model.enabled
                           ? 'text-muted-foreground hover:bg-muted hover:text-warning'
-                          : 'text-muted-foreground/40 cursor-not-allowed',
+                          : 'text-muted-foreground cursor-not-allowed',
                     )}
                     title="设为默认"
                   >

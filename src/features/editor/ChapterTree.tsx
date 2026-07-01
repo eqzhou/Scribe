@@ -476,7 +476,7 @@ function SortableChapterItem({ chapter, active, onClick, onDelete, onStatusChang
             <span
               className={cn(
                 'mt-0.5 block truncate text-[12px]',
-                active ? 'text-primary/70' : 'text-muted-foreground/70',
+                active ? 'text-primary' : 'text-muted-foreground',
               )}
             >
               {outlineSummary}

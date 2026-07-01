@@ -109,7 +109,7 @@ export default function Topbar() {
     >
       {/* 品牌图标：点击回到首页 */}
       <a
-        href="/landing.html"
+        href="/"
         className="group flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-secondary/40 bg-secondary/10 font-brush text-lg text-primary transition-all duration-200 hover:border-primary hover:bg-primary/15 hover:shadow-soft"
         title="返回首页"
         aria-label="返回首页"

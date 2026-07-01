@@ -37,7 +37,7 @@ export function EmptyState({
     >
       {glyph && (
         <div
-          className="font-brush text-6xl text-muted-foreground/20 leading-none mb-4"
+          className="font-brush text-6xl text-muted-foreground leading-none mb-4"
           aria-hidden="true"
         >
           {glyph}

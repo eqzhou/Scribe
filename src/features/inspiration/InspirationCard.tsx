@@ -41,7 +41,7 @@ export function InspirationCard({ inspiration, index, onClick }: InspirationCard
     >
       {/* 引号装饰 */}
       <span
-        className="font-brush text-2xl leading-none text-muted-foreground/20 select-none"
+        className="font-brush text-2xl leading-none text-muted-foreground select-none"
         aria-hidden="true"
       >
         「
@@ -56,7 +56,7 @@ export function InspirationCard({ inspiration, index, onClick }: InspirationCard
 
       {/* 内容（纯文本，保留换行） */}
       {hasContent ? (
-        <p className="whitespace-pre-wrap font-serif text-sm leading-relaxed text-foreground/80 line-clamp-[6]">
+        <p className="whitespace-pre-wrap font-serif text-sm leading-relaxed text-foreground line-clamp-[6]">
           {inspiration.content}
         </p>
       ) : (

@@ -40,6 +40,13 @@ app.use(express.static(STATIC_ROOT, {
   index: false,
 }));
 
+// 根路径直接返回落地页
+app.get('/', (_req, res, next) => {
+  res.sendFile(path.join(STATIC_ROOT, 'landing.html'), (err) => {
+    if (err) next(err);
+  });
+});
+
 // SPA fallback：所有未匹配的 GET 请求统一返回 index.html，交由前端路由处理
 const spaFallback: RequestHandler = (_req, res, next) => {
   res.sendFile(path.join(STATIC_ROOT, 'index.html'), (err) => {

@@ -36,6 +36,20 @@ const __dirname = path.dirname(__filename);
 const DATA_DIR = path.resolve(__dirname, '..', '..', 'data');
 const DATA_FILE = path.join(DATA_DIR, 'models.json');
 
+/** 默认全部能力 */
+const DEFAULT_CAPABILITIES = ['continue', 'rewrite', 'polish', 'expand', 'outline', 'fulltext', 'dialogue', 'worldview'];
+
+/** 掩码 API Key，仅保留前 6 位 */
+function maskApiKey(key: string): string {
+  return key ? key.slice(0, 6) + '***' : '';
+}
+
+/** 返回掩码后的模型副本（不泄露 apiKey） */
+function maskModel(m: ServerAIModel): ServerAIModel {
+  const { apiKey, ...rest } = m;
+  return { ...rest, apiKey: maskApiKey(apiKey) } as ServerAIModel;
+}
+
 let cache: StoreData | null = null;
 let writeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -58,7 +72,7 @@ function load(): StoreData {
   } catch {
     cache = { models: [], activeModelId: null };
   }
-  return cache!;
+  return cache;
 }
 
 function save(): void {
@@ -75,11 +89,7 @@ function save(): void {
 /** 列出所有模型(不返回 apiKey,避免泄露) */
 export function listModels(includeKey = false): ServerAIModel[] {
   const data = load();
-  return data.models.map((m) => {
-    if (includeKey) return { ...m };
-    const { apiKey, ...rest } = m;
-    return { ...rest, apiKey: apiKey ? apiKey.slice(0, 6) + '***' : '' } as ServerAIModel;
-  });
+  return data.models.map((m) => (includeKey ? { ...m } : maskModel(m)));
 }
 
 /** 获取激活的默认模型(返回完整 key,供 AI 服务内部使用) */
@@ -98,9 +108,7 @@ export function getModel(id: string, includeKey = false): ServerAIModel | null {
   const data = load();
   const m = data.models.find((x) => x.id === id);
   if (!m) return null;
-  if (includeKey) return { ...m };
-  const { apiKey, ...rest } = m;
-  return { ...rest, apiKey: apiKey ? apiKey.slice(0, 6) + '***' : '' } as ServerAIModel;
+  return includeKey ? { ...m } : maskModel(m);
 }
 
 export function createModel(input: Omit<ServerAIModel, 'id' | 'createdAt' | 'updatedAt'>): ServerAIModel {
@@ -124,8 +132,7 @@ export function createModel(input: Omit<ServerAIModel, 'id' | 'createdAt' | 'upd
   }
   data.models.push(model);
   save();
-  const { apiKey, ...rest } = model;
-  return { ...rest, apiKey: apiKey ? apiKey.slice(0, 6) + '***' : '' } as ServerAIModel;
+  return maskModel(model);
 }
 
 export function updateModel(id: string, patch: Partial<ServerAIModel>): ServerAIModel | null {
@@ -147,8 +154,7 @@ export function updateModel(id: string, patch: Partial<ServerAIModel>): ServerAI
   }
   data.models[idx] = updated;
   save();
-  const { apiKey, ...rest } = updated;
-  return { ...rest, apiKey: apiKey ? apiKey.slice(0, 6) + '***' : '' } as ServerAIModel;
+  return maskModel(updated);
 }
 
 export function deleteModel(id: string): boolean {
@@ -205,10 +211,10 @@ export async function testModel(id: string): Promise<{ ok: boolean; message: str
     const text = await r.text().catch(() => '');
     return { ok: false, message: `连接失败 (${r.status}): ${text.slice(0, 120)}` };
   } catch (err) {
-    const message = err instanceof Error ? err.message : '未知错误';
     if (err instanceof Error && err.name === 'AbortError') {
       return { ok: false, message: '连接超时' };
     }
+    const message = err instanceof Error ? err.message : '未知错误';
     return { ok: false, message: `网络错误: ${message}` };
   } finally {
     clearTimeout(timeout);

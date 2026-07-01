@@ -359,7 +359,7 @@ export default function GlobalSearch() {
                             )}
                           </div>
                           <CornerDownLeft
-                            className="h-3 w-3 flex-shrink-0 text-muted-foreground group-hover/item:text-primary/50 transition-colors"
+                            className="h-3 w-3 flex-shrink-0 text-muted-foreground group-hover/item:text-primary transition-colors"
                             aria-hidden="true"
                           />
                         </button>
