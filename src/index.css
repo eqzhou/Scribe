@@ -1,0 +1,467 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ========================================================================== */
+/* 主题系统：色彩主题 + 明暗模式双层叠加                                       */
+/*                                                                            */
+/* 色彩主题（color theme）：                                                   */
+/*   .theme-blue      — 蓝调（默认）                                           */
+/*   .theme-vermilion — 朱砂红（Scribe 品牌色）                                    */
+/*                                                                            */
+/* 明暗模式（mode）：                                                          */
+/*   .theme-light     — 明亮模式                                               */
+/*   .theme-dark      — 暗黑模式                                               */
+/*                                                                            */
+/* 组合示例：.theme-blue.theme-light  → 蓝调明亮                               */
+/*          .theme-vermilion.theme-dark → 朱砂红暗黑                           */
+/* ========================================================================== */
+
+@layer base {
+  /* ---------- 共享语义 token（色彩无关，随明暗模式切换） ---------- */
+  /* 对齐落地页: Slate 背景系 + 柔和边框 + 低对比度阴影 */
+
+  :root,
+  .theme-light {
+    /* Slate 背景/前景: 50 → 900 */
+    --background: 210 40% 98%;      /* #f8fafc - Slate 50 */
+    --foreground: 222 47% 11%;      /* #0f172a - Slate 900 */
+
+    --card: 0 0% 100%;              /* #ffffff */
+    --card-foreground: 222 47% 11%; /* #0f172a */
+
+    --popover: 0 0% 100%;           /* #ffffff */
+    --popover-foreground: 222 47% 11%;
+
+    /* muted: Slate 100, muted-foreground: Slate 600 */
+    --muted: 210 40% 96%;           /* #f1f5f9 - Slate 100 */
+    --muted-foreground: 215 16% 47%; /* #475569 - Slate 600 */
+
+    --accent: 210 40% 96%;          /* 同 muted */
+    --accent-foreground: 222 47% 11%;
+
+    /* 边框: Slate 200 / 100 (border-first, minimal elevation) */
+    --border: 213 22% 91%;          /* #e2e8f0 - Slate 200 */
+    --border-soft: 210 40% 96%;     /* #f1f5f9 - Slate 100 */
+    --input: 213 22% 91%;
+
+    --overlay-color: rgba(15, 23, 42, 0.5); /* Slate 900 base */
+    --panel-bg: 0 0% 100%;
+    --panel-fg: 222 47% 11%;
+
+    /* 柔和阴影(border-first 风格,从落地页) */
+    --shadow-lifted: 0 12px 40px rgba(0, 0, 0, 0.08);
+    --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.04);
+    --shadow-premium: 0 4px 16px rgba(0, 0, 0, 0.05);
+  }
+
+  .theme-dark {
+    /* Slate 深色背景系: 900 → 50 */
+    --background: 222 47% 11%;      /* #0f172a - Slate 900 */
+    --foreground: 210 40% 98%;      /* #f8fafc - Slate 50 */
+
+    --card: 217 33% 17%;            /* #1e293b - Slate 800 */
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 11%;         /* #0f172a */
+    --popover-foreground: 210 40% 98%;
+
+    /* muted: Slate 700, muted-foreground: Slate 300 */
+    --muted: 217 27% 25%;           /* #334155 - Slate 700 */
+    --muted-foreground: 215 16% 78%; /* #cbd5e1 - Slate 300 */
+
+    --accent: 217 27% 25%;          /* 同 muted */
+    --accent-foreground: 210 40% 98%;
+
+    /* 边框: Slate 700 / 800 */
+    --border: 217 27% 25%;          /* #334155 */
+    --border-soft: 217 33% 17%;     /* #1e293b */
+    --input: 217 27% 25%;
+
+    --overlay-color: rgba(0, 0, 0, 0.7);
+    --panel-bg: 217 33% 17%;        /* Slate 800 */
+    --panel-fg: 210 40% 98%;
+
+    /* 深色阴影(更重) */
+    --shadow-lifted: 0 12px 40px rgba(0, 0, 0, 0.35);
+    --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.2);
+    --shadow-premium: 0 4px 16px rgba(0, 0, 0, 0.25);
+  }
+
+}
+
+/* ========================================================================== */
+/* 色彩主题变量（置于 @layer 之外，避免 PostCSS 去重导致 light 规则丢失）*/
+/* ========================================================================== */
+
+/* ---------- 蓝调主题（默认，对齐落地页 Indigo 色系） ---------- */
+/* primary: Indigo 600 (#4f46e5); hover: Indigo 700 (#4338ca); deep: Indigo 800 */
+
+:root,
+.theme-blue {
+  --primary: 239 84% 67%;           /* Indigo 600 (#6366f1) - 更亮更饱和 */
+  --primary-foreground: 0 0% 100%;  /* #ffffff */
+  --primary-deep: 239 84% 57%;      /* Indigo 700 (#4f46e5) */
+
+  --secondary: 210 40% 96%;         /* Slate 100 */
+  --secondary-foreground: 222 47% 11%; /* Slate 900 */
+
+  --warning: 38 92% 50%;            /* Amber 500 */
+  --warning-foreground: 48 96% 89%; /* Amber 50 */
+
+  --destructive: 0 84% 60%;         /* Red 500 */
+  --destructive-foreground: 0 0% 100%;
+
+  --ring: 239 84% 67%;              /* 同 primary */
+
+  --moss: 160 60% 45%;              /* Emerald - 状态指示 */
+  --gold: 38 75% 50%;               /* Amber - 强调辅色 */
+}
+
+.theme-blue.theme-dark {
+  --primary: 239 84% 78%;           /* Indigo 400 (#818cf8) */
+  --primary-foreground: 0 0% 100%;
+  --primary-deep: 239 84% 68%;      /* Indigo 500 (#6366f1) */
+
+  --secondary: 217 27% 25%;         /* Slate 700 */
+  --secondary-foreground: 210 40% 98%; /* Slate 50 */
+
+  --warning: 38 92% 50%;
+  --warning-foreground: 48 96% 89%;
+
+  --destructive: 0 62% 30%;         /* Red 700 */
+  --destructive-foreground: 0 0% 100%;
+
+  --ring: 239 84% 78%;
+
+  --moss: 160 50% 55%;
+  --gold: 38 75% 58%;
+}
+
+/* ---------- 朱砂红主题（Scribe 品牌色） ---------- */
+
+.theme-vermilion {
+  --primary: 10 70% 45%;
+  --primary-foreground: 30 20% 98%;
+  --primary-deep: 10 70% 35%;
+
+  --secondary: 30 30% 92%;
+  --secondary-foreground: 20 30% 20%;
+
+  --warning: 38 80% 48%;
+  --warning-foreground: 48 96% 92%;
+
+  --destructive: 0 70% 50%;
+  --destructive-foreground: 30 20% 98%;
+
+  --ring: 10 70% 45%;
+
+  --moss: 140 30% 32%;
+  --gold: 38 65% 42%;
+}
+
+.theme-vermilion.theme-dark {
+  --primary: 10 70% 55%;
+  --primary-foreground: 20 20% 98%;
+  --primary-deep: 10 70% 45%;
+
+  --secondary: 10 25% 16%;
+  --secondary-foreground: 20 20% 90%;
+
+  --warning: 38 80% 55%;
+  --warning-foreground: 48 96% 92%;
+
+  --destructive: 0 60% 35%;
+  --destructive-foreground: 20 20% 98%;
+
+  --ring: 10 70% 55%;
+
+  --moss: 140 35% 45%;
+  --gold: 38 70% 55%;
+}
+
+/* ---------- 墨绿主题（文人雅致） ---------- */
+
+.theme-moss {
+  --primary: 152 50% 32%;
+  --primary-foreground: 150 30% 98%;
+  --primary-deep: 152 50% 22%;
+
+  --secondary: 150 25% 92%;
+  --secondary-foreground: 152 30% 18%;
+
+  --warning: 38 80% 48%;
+  --warning-foreground: 48 96% 92%;
+
+  --destructive: 0 70% 50%;
+  --destructive-foreground: 150 30% 98%;
+
+  --ring: 152 50% 32%;
+
+  --moss: 152 45% 28%;
+  --gold: 38 65% 42%;
+}
+
+.theme-moss.theme-dark {
+  --primary: 152 45% 50%;
+  --primary-foreground: 150 30% 98%;
+  --primary-deep: 152 45% 40%;
+
+  --secondary: 152 25% 16%;
+  --secondary-foreground: 150 20% 88%;
+
+  --warning: 38 80% 55%;
+  --warning-foreground: 48 96% 92%;
+
+  --destructive: 0 60% 35%;
+  --destructive-foreground: 150 30% 98%;
+
+  --ring: 152 45% 50%;
+
+  --moss: 152 40% 45%;
+  --gold: 38 70% 55%;
+}
+
+/* ---------- 紫调主题（神秘高贵） ---------- */
+
+.theme-purple {
+  --primary: 265 60% 55%;
+  --primary-foreground: 270 30% 98%;
+  --primary-deep: 265 60% 45%;
+
+  --secondary: 270 30% 94%;
+  --secondary-foreground: 265 30% 20%;
+
+  --warning: 38 80% 48%;
+  --warning-foreground: 48 96% 92%;
+
+  --destructive: 0 70% 50%;
+  --destructive-foreground: 270 30% 98%;
+
+  --ring: 265 60% 55%;
+
+  --moss: 142 35% 38%;
+  --gold: 38 65% 42%;
+}
+
+.theme-purple.theme-dark {
+  --primary: 265 70% 68%;
+  --primary-foreground: 270 30% 98%;
+  --primary-deep: 265 65% 58%;
+
+  --secondary: 270 25% 18%;
+  --secondary-foreground: 270 20% 88%;
+
+  --warning: 38 80% 55%;
+  --warning-foreground: 48 96% 92%;
+
+  --destructive: 0 60% 35%;
+  --destructive-foreground: 270 30% 98%;
+
+  --ring: 265 70% 68%;
+
+  --moss: 142 40% 48%;
+  --gold: 38 70% 55%;
+}
+
+/* ---------- 铜金主题（典雅复古） ---------- */
+
+.theme-gold {
+  --primary: 38 75% 42%;
+  --primary-foreground: 40 30% 98%;
+  --primary-deep: 38 75% 32%;
+
+  --secondary: 40 30% 92%;
+  --secondary-foreground: 30 35% 20%;
+
+  --warning: 25 80% 50%;
+  --warning-foreground: 48 96% 92%;
+
+  --destructive: 0 70% 50%;
+  --destructive-foreground: 40 30% 98%;
+
+  --ring: 38 75% 42%;
+
+  --moss: 142 35% 35%;
+  --gold: 38 70% 40%;
+}
+
+.theme-gold.theme-dark {
+  --primary: 38 80% 58%;
+  --primary-foreground: 40 30% 98%;
+  --primary-deep: 38 75% 48%;
+
+  --secondary: 40 20% 18%;
+  --secondary-foreground: 40 20% 88%;
+
+  --warning: 25 80% 58%;
+  --warning-foreground: 48 96% 92%;
+
+  --destructive: 0 60% 35%;
+  --destructive-foreground: 40 30% 98%;
+
+  --ring: 38 80% 58%;
+
+  --moss: 142 40% 48%;
+  --gold: 38 75% 58%;
+}
+
+/* ---------- 玫瑰主题（柔美温婉） ---------- */
+
+.theme-rose {
+  --primary: 335 65% 55%;
+  --primary-foreground: 340 30% 98%;
+  --primary-deep: 335 65% 45%;
+
+  --secondary: 340 30% 94%;
+  --secondary-foreground: 335 30% 22%;
+
+  --warning: 38 80% 48%;
+  --warning-foreground: 48 96% 92%;
+
+  --destructive: 0 70% 50%;
+  --destructive-foreground: 340 30% 98%;
+
+  --ring: 335 65% 55%;
+
+  --moss: 142 35% 38%;
+  --gold: 38 65% 42%;
+}
+
+.theme-rose.theme-dark {
+  --primary: 335 70% 68%;
+  --primary-foreground: 340 30% 98%;
+  --primary-deep: 335 65% 58%;
+
+  --secondary: 340 25% 18%;
+  --secondary-foreground: 340 20% 88%;
+
+  --warning: 38 80% 55%;
+  --warning-foreground: 48 96% 92%;
+
+  --destructive: 0 60% 35%;
+  --destructive-foreground: 340 30% 98%;
+
+  --ring: 335 70% 68%;
+
+  --moss: 142 40% 48%;
+  --gold: 38 70% 55%;
+}
+
+/* ---------- legacy token 兼容 ---------- */
+:root,
+.theme-light {
+  --hover-inverse-bg: 222.2 84% 4.9%;
+  --hover-inverse-fg: 210 40% 98%;
+}
+.theme-dark {
+  --hover-inverse-bg: 210 40% 98%;
+  --hover-inverse-fg: 222.2 84% 4.9%;
+}
+
+
+
+/* ========================================================================== */
+/* 基础样式                                                                    */
+/* ========================================================================== */
+
+@layer base {
+  * {
+    @apply border-border;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+      sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border/60 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/50;
+  }
+
+  *:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /* 编辑器正文字体 */
+  .ProseMirror {
+    outline: none;
+    font-family: 'Noto Serif SC', Georgia, serif;
+    @apply text-foreground;
+    line-height: 1.85;
+    font-size: 17px;
+    letter-spacing: 0.01em;
+  }
+  .ProseMirror p {
+    margin: 0 0 1em 0;
+  }
+
+  ::selection {
+    @apply bg-primary/20;
+    color: inherit;
+  }
+}
+
+/* ========================================================================== */
+/* 通用组件层                                                                  */
+/* ========================================================================== */
+
+@layer components {
+  /* 统一卡片容器 */
+  .card-base {
+    @apply rounded-xl border border-border bg-card shadow-sm transition-all duration-200;
+  }
+  .card-base:hover {
+    @apply shadow-md border-primary/40;
+  }
+
+  /* 统一标题区 */
+  .page-header {
+    @apply mb-6;
+  }
+  .page-title {
+    @apply font-serif text-2xl font-bold tracking-wide text-foreground;
+  }
+  .page-subtitle {
+    @apply mt-1.5 font-serif text-sm text-muted-foreground;
+  }
+
+  /* 统一工具栏 */
+  .toolbar {
+    @apply mb-4 flex items-center justify-between;
+  }
+
+  /* 按钮点击微动效 */
+  .btn-press {
+    @apply active:scale-95;
+  }
+}

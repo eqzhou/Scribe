@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scribe — Novel Crafting System</title>
+    <meta name="description" content="本地优先的中文小说写作系统。六大核心模块,零注册,AI 懂你的故事。数据留存浏览器,不上云。" />
+    <link rel="icon" href="/favicon.svg" />
+    <style id="theme-vars">
+/* ==========================================================================
+   Scribe Landing Page — Brand CSS
+   Modern Minimal / Global Audience
+   ========================================================================== */
+
+/* ---------- Design Tokens ---------- */
+:root {
+  /* Brand palette */
+  --color-primary: #4f46e5;
+  --color-primary-hover: #4338ca;
+  --color-primary-light: #eef2ff;
+  --color-primary-muted: #c7d2fe;
+
+  /* Neutrals */
+  --color-bg: #ffffff;
+  --color-bg-secondary: #f8fafc;
+  --color-bg-tertiary: #f1f5f9;
+  --color-surface: #ffffff;
+  --color-surface-elevated: #ffffff;
+  --color-border: #e2e8f0;
+  --color-border-subtle: #f1f5f9;
+
+  /* Text */
+  --color-text: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-tertiary: #94a3b8;
+  --color-text-inverse: #ffffff;
+
+  /* Semantic states */
+  --state-success: #059669;
+  --state-warning: #d97706;
+  --state-error: #dc2626;
+  --state-info: #2563eb;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+  --space-4xl: 96px;
+  --space-5xl: 128px;
+
+  /* Shadows (border-first, minimal elevation) */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.05);
+  --shadow-elevated: 0 12px 40px rgba(0, 0, 0, 0.08);
+}
+
+/* Dark mode tokens */
+.dark {
+  --color-primary: #818cf8;
+  --color-primary-hover: #6366f1;
+  --color-primary-light: rgba(99, 102, 241, 0.12);
+  --color-primary-muted: rgba(99, 102, 241, 0.3);
+
+  --color-bg: #0f172a;
+  --color-bg-secondary: #1e293b;
+  --color-bg-tertiary: #334155;
+  --color-surface: #1e293b;
+  --color-surface-elevated: #334155;
+  --color-border: #334155;
+  --color-border-subtle: #1e293b;
+
+  --color-text: #f8fafc;
+  --color-text-secondary: #cbd5e1;
+  --color-text-tertiary: #64748b;
+  --color-text-inverse: #0f172a;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.25);
+  --shadow-elevated: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------- Typography ---------- */
+.scribe-h1 {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 56px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: var(--color-text);
+}
+
+.scribe-h2 {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 40px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  color: var(--color-text);
+}
+
+.scribe-h3 {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+  color: var(--color-text);
+}
+
+.scribe-body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.scribe-body-lg {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.scribe-caption {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--color-text-tertiary);
+}
+
+.scribe-label {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+/* ---------- Component Tokens ---------- */
+.scribe-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  transition: background 0.15s ease, transform 0.15s ease;
+  cursor: pointer;
+  border: none;
+  text-decoration: none;
+}
+.scribe-btn-primary:hover {
+  background: var(--color-primary-hover);
+  transform: translateY(-1px);
+}
+
+.scribe-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  border: 1px solid var(--color-border);
+  transition: background 0.15s ease, border-color 0.15s ease;
+  cursor: pointer;
+  text-decoration: none;
+}
+.scribe-btn-secondary:hover {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-text-tertiary);
+}
+
+.scribe-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-xl);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.scribe-card:hover {
+  border-color: var(--color-text-tertiary);
+  box-shadow: var(--shadow-md);
+}
+
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <style type="text/tailwindcss">
+  @theme inline {
+    --color-primary: var(--color-primary);
+    --color-border: var(--color-border);
+  }
+  @layer base {
+    body { background: var(--color-surface); color: var(--color-foreground); }
+    td, th { @apply break-words; word-break: break-all; word-break: auto-phrase; }
+    th { @apply whitespace-nowrap; }
+  }
+    </style>
+    <style>
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      [data-icon] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        background-color: currentColor;
+      }
+    </style>
+</head>
+<body class="min-h-screen font-sans antialiased">
+    <main>
+
+      <!-- ===== Sticky Navigation ===== -->
+      <nav class="fixed top-0 left-0 right-0 z-50 border-b" style="background: var(--color-bg); border-color: var(--color-border-subtle);">
+        <div class="max-w-6xl mx-auto px-6 flex items-center justify-between" style="height: 64px;">
+          <!-- Logo -->
+          <a href="/landing.html" class="flex items-center gap-2 no-underline" style="color: var(--color-text);">
+            <span class="flex items-center justify-center" style="width: 28px; height: 28px; background: var(--color-primary); border-radius: var(--radius-md);">
+              <i data-lucide="feather" style="width: 16px; height: 16px; color: var(--color-text-inverse);"></i>
+            </span>
+            <span class="font-semibold text-lg tracking-tight">Scribe</span>
+          </a>
+          <!-- Nav Links -->
+          <div class="hidden md:flex items-center gap-8">
+            <a href="#features" class="text-sm no-underline transition-colors duration-150" style="color: var(--color-text-secondary);" onmouseover="this.style.color='var(--color-text)'" onmouseout="this.style.color='var(--color-text-secondary)'">功能</a>
+            <a href="#ai-writing" class="text-sm no-underline transition-colors duration-150" style="color: var(--color-text-secondary);" onmouseover="this.style.color='var(--color-text)'" onmouseout="this.style.color='var(--color-text-secondary)'">AI 助写</a>
+            <a href="#stats" class="text-sm no-underline transition-colors duration-150" style="color: var(--color-text-secondary);" onmouseover="this.style.color='var(--color-text)'" onmouseout="this.style.color='var(--color-text-secondary)'">为何选 Scribe</a>
+          </div>
+          <!-- CTA -->
+          <a href="/editor" class="scribe-btn-primary text-sm" style="padding: 8px 16px;">开始写作</a>
+        </div>
+      </nav>
+
+      <!-- ===== Hero Section ===== -->
+      <section class="pt-32 pb-20 md:pt-40 md:pb-28">
+        <div class="max-w-6xl mx-auto px-6 text-center">
+          <!-- Hero Headline -->
+          <h1 class="scribe-h1" style="text-wrap: balance; word-break: keep-all; overflow-wrap: break-word; max-width: 720px; margin: 0 auto;">
+            你的小说,<br>
+            <span style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">结构化成书。</span>
+          </h1>
+          <!-- Subtitle -->
+          <p class="scribe-body-lg mx-auto mt-6" style="max-width: 560px;">
+            本地优先的中文小说写作系统。六大核心模块,零注册,AI 懂你的故事。
+          </p>
+          <!-- CTA Buttons -->
+          <div class="flex items-center justify-center gap-4 mt-10">
+            <a href="/editor" class="scribe-btn-primary" style="padding: 12px 24px;">
+              <i data-lucide="pen-line" style="width: 16px; height: 16px;"></i>
+              开始写作
+            </a>
+            <a href="#features" class="scribe-btn-secondary" style="padding: 12px 24px;">
+              <i data-lucide="layers" style="width: 16px; height: 16px;"></i>
+              了解功能
+            </a>
+          </div>
+          <!-- Hero Screenshot -->
+          <div class="mt-16 relative" style="max-width: 960px; margin-left: auto; margin-right: auto;">
+            <div class="border" style="border-radius: var(--radius-xl); overflow: hidden; border-color: var(--color-border); transform: rotate(-1deg); box-shadow: var(--shadow-lg);">
+              <img src="/hero-screenshot.jpg" alt="Scribe 小说写作工作台,展示章节编辑器与故事结构" class="w-full block" style="aspect-ratio: 16/10; object-fit: cover;" loading="eager">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== Trust Badges ===== -->
+      <section class="pb-20 md:pb-24">
+        <div class="max-w-6xl mx-auto px-6">
+          <div class="flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
+            <div class="flex items-center gap-2" style="color: var(--color-text-tertiary);">
+              <i data-lucide="shield-check" style="width: 18px; height: 18px;"></i>
+              <span class="text-sm font-medium">数据本地存储</span>
+            </div>
+            <div class="flex items-center gap-2" style="color: var(--color-text-tertiary);">
+              <i data-lucide="wifi-off" style="width: 18px; height: 18px;"></i>
+              <span class="text-sm font-medium">离线可用</span>
+            </div>
+            <div class="flex items-center gap-2" style="color: var(--color-text-tertiary);">
+              <i data-lucide="sparkles" style="width: 18px; height: 18px;"></i>
+              <span class="text-sm font-medium">AI 辅助</span>
+            </div>
+            <div class="flex items-center gap-2" style="color: var(--color-text-tertiary);">
+              <i data-lucide="heart" style="width: 18px; height: 18px;"></i>
+              <span class="text-sm font-medium">永久免费</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== Feature Grid ===== -->
+      <section id="features" class="py-20 md:py-28" style="background: var(--color-bg-secondary);">
+        <div class="max-w-6xl mx-auto px-6">
+          <!-- Section Header -->
+          <div class="text-center mb-16">
+            <h2 class="scribe-h2" style="text-wrap: balance; word-break: keep-all; overflow-wrap: break-word;">为长篇创作而生</h2>
+            <p class="scribe-body-lg mt-4 mx-auto" style="max-width: 480px;">六大互联模块,覆盖小说每个层面,从初稿到终稿。</p>
+          </div>
+          <!-- 3-Column Grid -->
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Feature 01 -->
+            <div class="scribe-card group">
+              <div class="flex items-baseline gap-3 mb-4">
+                <span class="scribe-label" style="color: var(--color-primary); font-size: 13px; letter-spacing: 0.04em;">01</span>
+              </div>
+              <div class="flex items-center gap-3 mb-3">
+                <span class="flex items-center justify-center shrink-0" style="width: 36px; height: 36px; background: var(--color-primary-light); border-radius: var(--radius-md);">
+                  <i data-lucide="file-text" style="width: 18px; height: 18px; color: var(--color-primary);"></i>
+                </span>
+                <h3 class="scribe-h3" style="font-size: 20px;">章节编辑器</h3>
+              </div>
+              <p class="scribe-body" style="font-size: 15px; line-height: 1.6;">专注的富文本编辑器,自动保存于本地。字数目标、版本快照、分栏预览,长篇无忧。</p>
+            </div>
+            <!-- Feature 02 -->
+            <div class="scribe-card group">
+              <div class="flex items-baseline gap-3 mb-4">
+                <span class="scribe-label" style="color: var(--color-primary); font-size: 13px; letter-spacing: 0.04em;">02</span>
+              </div>
+              <div class="flex items-center gap-3 mb-3">
+                <span class="flex items-center justify-center shrink-0" style="width: 36px; height: 36px; background: var(--color-primary-light); border-radius: var(--radius-md);">
+                  <i data-lucide="users" style="width: 18px; height: 18px; color: var(--color-primary);"></i>
+                </span>
+                <h3 class="scribe-h3" style="font-size: 20px;">角色管理</h3>
+              </div>
+              <p class="scribe-body" style="font-size: 15px; line-height: 1.6;">立人物卡,记别名、外貌、性格、关系。改名时全章节自动同步,角色弧光一目了然。</p>
+            </div>
+            <!-- Feature 03 -->
+            <div class="scribe-card group">
+              <div class="flex items-baseline gap-3 mb-4">
+                <span class="scribe-label" style="color: var(--color-primary); font-size: 13px; letter-spacing: 0.04em;">03</span>
+              </div>
+              <div class="flex items-center gap-3 mb-3">
+                <span class="flex items-center justify-center shrink-0" style="width: 36px; height: 36px; background: var(--color-primary-light); border-radius: var(--radius-md);">
+                  <i data-lucide="globe" style="width: 18px; height: 18px; color: var(--color-primary);"></i>
+                </span>
+                <h3 class="scribe-h3" style="font-size: 20px;">世界观设定</h3>
+              </div>
+              <p class="scribe-body" style="font-size: 15px; line-height: 1.6;">地理、势力、典章、物品,分层归类。交叉引用,保持你的世界内部自洽。</p>
+            </div>
+            <!-- Feature 04 -->
+            <div class="scribe-card group">
+              <div class="flex items-baseline gap-3 mb-4">
+                <span class="scribe-label" style="color: var(--color-primary); font-size: 13px; letter-spacing: 0.04em;">04</span>
+              </div>
+              <div class="flex items-center gap-3 mb-3">
+                <span class="flex items-center justify-center shrink-0" style="width: 36px; height: 36px; background: var(--color-primary-light); border-radius: var(--radius-md);">
+                  <i data-lucide="git-branch" style="width: 18px; height: 18px; color: var(--color-primary);"></i>
+                </span>
+                <h3 class="scribe-h3" style="font-size: 20px;">剧情时间线</h3>
+              </div>
+              <p class="scribe-body" style="font-size: 15px; line-height: 1.6;">主线支线分泳道,拖拽重排节点,伏笔状态机追踪,叙事节奏可视化。</p>
+            </div>
+            <!-- Feature 05 -->
+            <div class="scribe-card group">
+              <div class="flex items-baseline gap-3 mb-4">
+                <span class="scribe-label" style="color: var(--color-primary); font-size: 13px; letter-spacing: 0.04em;">05</span>
+              </div>
+              <div class="flex items-center gap-3 mb-3">
+                <span class="flex items-center justify-center shrink-0" style="width: 36px; height: 36px; background: var(--color-primary-light); border-radius: var(--radius-md);">
+                  <i data-lucide="library" style="width: 18px; height: 18px; color: var(--color-primary);"></i>
+                </span>
+                <h3 class="scribe-h3" style="font-size: 20px;">场景库</h3>
+              </div>
+              <p class="scribe-body" style="font-size: 15px; line-height: 1.6;">按视角、地点、剧情线归类场景。标签筛选,可复用于多章节。</p>
+            </div>
+            <!-- Feature 06 -->
+            <div class="scribe-card group">
+              <div class="flex items-baseline gap-3 mb-4">
+                <span class="scribe-label" style="color: var(--color-primary); font-size: 13px; letter-spacing: 0.04em;">06</span>
+              </div>
+              <div class="flex items-center gap-3 mb-3">
+                <span class="flex items-center justify-center shrink-0" style="width: 36px; height: 36px; background: var(--color-primary-light); border-radius: var(--radius-md);">
+                  <i data-lucide="bot" style="width: 18px; height: 18px; color: var(--color-primary);"></i>
+                </span>
+                <h3 class="scribe-h3" style="font-size: 20px;">灵感速记</h3>
+              </div>
+              <p class="scribe-body" style="font-size: 15px; line-height: 1.6;">碎片想法即时收藏,标签分类,随时回看喂给故事。AI 可读取灵感作为续写素材。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== AI Writing Spotlight ===== -->
+      <section id="ai-writing" class="py-20 md:py-28">
+        <div class="max-w-6xl mx-auto px-6">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            <!-- Text Side -->
+            <div>
+              <h2 class="scribe-h2" style="text-wrap: balance; word-break: keep-all; overflow-wrap: break-word;">AI 懂你的故事</h2>
+              <p class="scribe-body-lg mt-6" style="max-width: 480px;">
+                不同于通用写作工具,Scribe 的 AI 读取你的整部手稿。它追踪人物声口,遵守世界规则,生成的文字听起来像你写的。
+              </p>
+              <ul class="mt-8 space-y-4">
+                <li class="flex items-start gap-3">
+                  <span class="flex items-center justify-center shrink-0 mt-0.5" style="width: 24px; height: 24px; background: var(--color-primary-light); border-radius: var(--radius-full);">
+                    <i data-lucide="check" style="width: 14px; height: 14px; color: var(--color-primary);"></i>
+                  </span>
+                  <span class="scribe-body" style="font-size: 15px;">感知角色声口的续写生成</span>
+                </li>
+                <li class="flex items-start gap-3">
+                  <span class="flex items-center justify-center shrink-0 mt-0.5" style="width: 24px; height: 24px; background: var(--color-primary-light); border-radius: var(--radius-full);">
+                    <i data-lucide="check" style="width: 14px; height: 14px; color: var(--color-primary);"></i>
+                  </span>
+                  <span class="scribe-body" style="font-size: 15px;">连贯性与剧情漏洞检测</span>
+                </li>
+                <li class="flex items-start gap-3">
+                  <span class="flex items-center justify-center shrink-0 mt-0.5" style="width: 24px; height: 24px; background: var(--color-primary-light); border-radius: var(--radius-full);">
+                    <i data-lucide="check" style="width: 14px; height: 14px; color: var(--color-primary);"></i>
+                  </span>
+                  <span class="scribe-body" style="font-size: 15px;">符合基调与语气的人物对话</span>
+                </li>
+                <li class="flex items-start gap-3">
+                  <span class="flex items-center justify-center shrink-0 mt-0.5" style="width: 24px; height: 24px; background: var(--color-primary-light); border-radius: var(--radius-full);">
+                    <i data-lucide="check" style="width: 14px; height: 14px; color: var(--color-primary);"></i>
+                  </span>
+                  <span class="scribe-body" style="font-size: 15px;">所有数据留存浏览器,不上云</span>
+                </li>
+              </ul>
+            </div>
+            <!-- Demo Mockup Side -->
+            <div class="border" style="border-radius: var(--radius-xl); background: var(--color-bg-secondary); border-color: var(--color-border); padding: var(--space-xl);">
+              <!-- Mock toolbar -->
+              <div class="flex items-center gap-2 mb-4 pb-4" style="border-bottom: 1px solid var(--color-border);">
+                <span class="flex items-center justify-center" style="width: 10px; height: 10px; border-radius: var(--radius-full); background: var(--color-text-tertiary); opacity: 0.3;"></span>
+                <span class="flex items-center justify-center" style="width: 10px; height: 10px; border-radius: var(--radius-full); background: var(--color-text-tertiary); opacity: 0.3;"></span>
+                <span class="flex items-center justify-center" style="width: 10px; height: 10px; border-radius: var(--radius-full); background: var(--color-text-tertiary); opacity: 0.3;"></span>
+                <span class="ml-auto scribe-caption" style="font-size: 12px;">AI 助写</span>
+              </div>
+              <!-- Mock conversation -->
+              <div class="space-y-4">
+                <!-- User message -->
+                <div class="flex gap-3">
+                  <span class="flex items-center justify-center shrink-0" style="width: 28px; height: 28px; border-radius: var(--radius-full); background: var(--color-primary-light);">
+                    <i data-lucide="user" style="width: 14px; height: 14px; color: var(--color-primary);"></i>
+                  </span>
+                  <div class="border" style="border-radius: var(--radius-lg); padding: 12px 16px; border-color: var(--color-border); background: var(--color-surface);">
+                    <p class="scribe-body" style="font-size: 14px; margin: 0;">帮我写林溯与沈砚的对峙场景,他们自第四章后就没再说话。</p>
+                  </div>
+                </div>
+                <!-- AI response -->
+                <div class="flex gap-3">
+                  <span class="flex items-center justify-center shrink-0" style="width: 28px; height: 28px; border-radius: var(--radius-full); background: var(--color-primary);">
+                    <i data-lucide="bot" style="width: 14px; height: 14px; color: var(--color-text-inverse);"></i>
+                  </span>
+                  <div style="border-radius: var(--radius-lg); padding: 12px 16px; background: var(--color-primary-light);">
+                    <p class="scribe-body" style="font-size: 14px; margin: 0; color: var(--color-text);">根据他们上次的交集,林溯对沈砚藏信一事感到被背叛。这是一段接住这层张力的草稿:</p>
+                    <p class="scribe-body mt-2" style="font-size: 13px; margin: 0; font-style: italic; color: var(--color-text-secondary); line-height: 1.6;">"你瞒着我。"林溯的声音很稳,指尖却贴着冰冷的栏杆发颤。"三周,沈砚。三周你都知道。"</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== Stats / Trust Section ===== -->
+      <section id="stats" class="py-20 md:py-28" style="background: var(--color-bg-secondary);">
+        <div class="max-w-6xl mx-auto px-6">
+          <div class="text-center mb-16">
+            <h2 class="scribe-h2" style="text-wrap: balance; word-break: keep-all; overflow-wrap: break-word;">为何选择 Scribe</h2>
+          </div>
+          <!-- Stats Grid -->
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
+            <div class="text-center py-6">
+              <div class="scribe-h2 mb-2" style="font-variant-numeric: tabular-nums;">6</div>
+              <p class="scribe-body" style="font-size: 15px; margin: 0;">核心模块</p>
+            </div>
+            <div class="text-center py-6" style="border-left: 1px solid var(--color-border);">
+              <div class="scribe-h2 mb-2" style="font-variant-numeric: tabular-nums;">0</div>
+              <p class="scribe-body" style="font-size: 15px; margin: 0;">注册门槛</p>
+            </div>
+            <div class="text-center py-6" style="border-left: 1px solid var(--color-border);">
+              <div class="scribe-h2 mb-2" style="font-variant-numeric: tabular-nums; font-size: 32px; line-height: 1;">无限</div>
+              <p class="scribe-body" style="font-size: 15px; margin: 0;">作品数量</p>
+            </div>
+            <div class="text-center py-6" style="border-left: 1px solid var(--color-border);">
+              <div class="flex items-center justify-center gap-2 mb-2">
+                <i data-lucide="sun" style="width: 24px; height: 24px; color: var(--color-primary);"></i>
+                <i data-lucide="moon" style="width: 24px; height: 24px; color: var(--color-text-tertiary);"></i>
+              </div>
+              <p class="scribe-body" style="font-size: 15px; margin: 0;">明暗双主题</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== Final CTA ===== -->
+      <section id="cta" class="py-20 md:py-28">
+        <div class="max-w-6xl mx-auto px-6 text-center">
+          <h2 class="scribe-h2" style="text-wrap: balance; word-break: keep-all; overflow-wrap: break-word;">开启下一章</h2>
+          <p class="scribe-body-lg mt-4 mx-auto" style="max-width: 480px;">
+            无需注册。打开浏览器,写下第一个字。你的手稿始终留在本机。
+          </p>
+          <div class="flex items-center justify-center gap-4 mt-10">
+            <a href="/editor" class="scribe-btn-primary" style="padding: 14px 28px; font-size: 16px;">
+              <i data-lucide="pen-line" style="width: 18px; height: 18px;"></i>
+              进入写作
+            </a>
+            <a href="#features" class="scribe-btn-secondary" style="padding: 14px 28px; font-size: 16px;">
+              查看功能
+            </a>
+          </div>
+          <p class="scribe-caption mt-6">永久免费 · 不上云 · 不追踪</p>
+        </div>
+      </section>
+
+      <!-- ===== Footer ===== -->
+      <footer class="py-12" style="border-top: 1px solid var(--color-border);">
+        <div class="max-w-6xl mx-auto px-6">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
+            <!-- Brand -->
+            <div class="col-span-2 md:col-span-1">
+              <div class="flex items-center gap-2 mb-3">
+                <span class="flex items-center justify-center" style="width: 24px; height: 24px; background: var(--color-primary); border-radius: var(--radius-md);">
+                  <i data-lucide="feather" style="width: 14px; height: 14px; color: var(--color-text-inverse);"></i>
+                </span>
+                <span class="font-semibold text-sm" style="color: var(--color-text);">Scribe</span>
+              </div>
+              <p class="scribe-caption" style="font-size: 13px;">你的小说,有序成书。</p>
+            </div>
+            <!-- Product -->
+            <div>
+              <h4 class="scribe-label mb-3" style="font-size: 11px;">产品</h4>
+              <ul class="space-y-2">
+                <li><a href="#features" class="scribe-caption no-underline block transition-colors duration-150" style="font-size: 13px;" onmouseover="this.style.color='var(--color-text)'" onmouseout="this.style.color='var(--color-text-tertiary)'">功能</a></li>
+                <li><a href="#ai-writing" class="scribe-caption no-underline block transition-colors duration-150" style="font-size: 13px;" onmouseover="this.style.color='var(--color-text)'" onmouseout="this.style.color='var(--color-text-tertiary)'">AI 助写</a></li>
+                <li><a href="/editor" class="scribe-caption no-underline block transition-colors duration-150" style="font-size: 13px;" onmouseover="this.style.color='var(--color-text)'" onmouseout="this.style.color='var(--color-text-tertiary)'">进入写作</a></li>
+              </ul>
+            </div>
+            <!-- Resources -->
+            <div>
+              <h4 class="scribe-label mb-3" style="font-size: 11px;">资源</h4>
+              <ul class="space-y-2">
+                <li><a href="/editor" class="scribe-caption no-underline block transition-colors duration-150" style="font-size: 13px;" onmouseover="this.style.color='var(--color-text)'" onmouseout="this.style.color='var(--color-text-tertiary)'">使用指南</a></li>
+                <li><a href="/editor" class="scribe-caption no-underline block transition-colors duration-150" style="font-size: 13px;" onmouseover="this.style.color='var(--color-text)'" onmouseout="this.style.color='var(--color-text-tertiary)'">快捷键</a></li>
+                <li><a href="/editor" class="scribe-caption no-underline block transition-colors duration-150" style="font-size: 13px;" onmouseover="this.style.color='var(--color-text)'" onmouseout="this.style.color='var(--color-text-tertiary)'">反馈</a></li>
+              </ul>
+            </div>
+            <!-- Legal -->
+            <div>
+              <h4 class="scribe-label mb-3" style="font-size: 11px;">理念</h4>
+              <ul class="space-y-2">
+                <li><a href="#" class="scribe-caption no-underline block transition-colors duration-150" style="font-size: 13px;" onmouseover="this.style.color='var(--color-text)'" onmouseout="this.style.color='var(--color-text-tertiary)'">本地优先</a></li>
+                <li><a href="#" class="scribe-caption no-underline block transition-colors duration-150" style="font-size: 13px;" onmouseover="this.style.color='var(--color-text)'" onmouseout="this.style.color='var(--color-text-tertiary)'">隐私至上</a></li>
+                <li><a href="#" class="scribe-caption no-underline block transition-colors duration-150" style="font-size: 13px;" onmouseover="this.style.color='var(--color-text)'" onmouseout="this.style.color='var(--color-text-tertiary)'">开源精神</a></li>
+              </ul>
+            </div>
+          </div>
+          <!-- Bottom bar -->
+          <div class="mt-12 pt-6 flex flex-col md:flex-row items-center justify-between gap-4" style="border-top: 1px solid var(--color-border);">
+            <p class="scribe-caption" style="font-size: 12px;">© 2026 Scribe · Novel Crafting System</p>
+            <div class="flex items-center gap-4">
+              <span class="scribe-caption" style="font-size: 12px;">数据留存于浏览器 · 不上云</span>
+            </div>
+          </div>
+        </div>
+      </footer>
+
+    </main>
+    <style>
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+      :focus-visible {
+        outline: 2px solid var(--color-primary);
+        outline-offset: 3px;
+        border-radius: 4px;
+      }
+    </style>
+    <script>
+      lucide.createIcons();
+    </script>
+</body>
+</html>

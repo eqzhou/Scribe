@@ -1,0 +1,42 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# 环境变量（含密钥，禁止提交）
+.env
+.env.*
+!.env.example
+
+# 服务端运行时数据（模型配置含 API Key）
+server/data
+
+# IDE 内部文件
+.trae
+
+# 备份文件
+*.bak
+
+# 测试截图与临时产物
+test-screenshots
+scribe-landing-redesign
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
