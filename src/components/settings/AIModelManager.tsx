@@ -14,6 +14,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, ChevronDown, Sparkles, AlertCircle, Loader2, Star } from 'lucide-react';
 import { useAIModelStore, PROVIDER_META } from '../../stores/aiModelStore';
+import { useToastStore } from '../../stores';
 import type { AIModel } from '../../types';
 import { Button, ConfirmDialog } from '../ui';
 import { cn } from '../../utils/cn';
@@ -38,6 +39,8 @@ export function AIModelManager() {
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  const pushToast = useToastStore.getState().pushToast;
 
   const enabledModels = getEnabledModels();
   const active = getActiveModel();
@@ -83,8 +86,7 @@ export function AIModelManager() {
       }
       setModalOpen(false);
     } catch (err) {
-      console.error('保存模型失败:', err);
-      alert(err instanceof Error ? err.message : '保存失败');
+      pushToast('error', err instanceof Error ? err.message : '保存失败');
     }
   };
 
@@ -103,8 +105,7 @@ export function AIModelManager() {
     try {
       await toggleEnabled(id);
     } catch (err) {
-      console.error('切换启用状态失败:', err);
-      alert(err instanceof Error ? err.message : '操作失败');
+      pushToast('error', err instanceof Error ? err.message : '操作失败');
     }
   };
 
@@ -113,8 +114,7 @@ export function AIModelManager() {
     try {
       await setDefault(id);
     } catch (err) {
-      console.error('设为默认失败:', err);
-      alert(err instanceof Error ? err.message : '操作失败');
+      pushToast('error', err instanceof Error ? err.message : '操作失败');
     }
   };
 
@@ -124,8 +124,7 @@ export function AIModelManager() {
       await deleteModel(id);
       setDeleteConfirmId(null);
     } catch (err) {
-      console.error('删除模型失败:', err);
-      alert(err instanceof Error ? err.message : '删除失败');
+      pushToast('error', err instanceof Error ? err.message : '删除失败');
     }
   };
 
@@ -248,7 +247,7 @@ export function AIModelManager() {
 
       {/* 说明条 */}
       <div className="flex items-start gap-2 rounded-lg border border-secondary/30 bg-secondary/5 px-3 py-2">
-        <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-secondary" />
+        <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-secondary" />
         <p className="text-xs leading-relaxed text-muted-foreground">
           支持所有 <span className="font-mono text-foreground">OpenAI 兼容接口</span> 的模型服务，
           包括云端 API（OpenAI、Anthropic、DeepSeek、通义、豆包、智谱、月之暗面等）
@@ -259,7 +258,7 @@ export function AIModelManager() {
       {/* 服务端连接错误提示 */}
       {error && !loading && (
         <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2">
-          <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-destructive" />
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
           <div className="flex-1">
             <p className="text-xs font-medium text-destructive">{error}</p>
             <button

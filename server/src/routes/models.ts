@@ -104,8 +104,8 @@ router.delete('/:id', (req: Request, res: Response) => {
 });
 
 // 设为激活默认模型
-router.post('/:id/activate', (_req: Request, res: Response) => {
-  const ok = setActiveModel(_req.params.id);
+router.post('/:id/activate', (req: Request, res: Response) => {
+  const ok = setActiveModel(req.params.id);
   if (!ok) { res.status(400).json({ error: '无法激活该模型' }); return; }
   res.json({ ok: true });
 });

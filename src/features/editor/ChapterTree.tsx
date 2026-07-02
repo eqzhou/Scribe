@@ -31,10 +31,9 @@ import {
 import { Plus, ChevronRight, BookPlus, FilePlus } from 'lucide-react';
 import { db } from '../../lib/db';
 import { chapterRepository, volumeRepository } from '../../lib/repositories';
-import { checkReferences } from '../../lib/referenceChecker';
 import type { Chapter, ChapterStatus, Volume } from '../../types';
-import type { ImpactInfo } from '../../components/ui';
 import { useEditorStore, useToastStore } from '../../stores';
+import { useDeleteWithImpact } from '../../hooks/useDeleteWithImpact';
 import { cn } from '../../utils/cn';
 import { Button, ConfirmDialog } from '../../components/ui';
 import { CHAPTER_STATUS_CONFIG } from './constants';
@@ -73,9 +72,9 @@ export function ChapterTree({ bookId }: ChapterTreeProps) {
 
   const [collapsedVolumes, setCollapsedVolumes] = useState<Set<string>>(new Set());
 
-  // 删除章节状态
+  // 删除章节状态：保留章节对象用于构建确认文案，引用影响检测复用通用 Hook
   const [confirmDelete, setConfirmDelete] = useState<Chapter | null>(null);
-  const [deleteImpact, setDeleteImpact] = useState<ImpactInfo | null>(null);
+  const { deleteImpact, requestDelete, cancelDelete } = useDeleteWithImpact();
   const pushToast = useToastStore.getState().pushToast;
 
   const sensors = useSensors(
@@ -156,11 +155,10 @@ export function ChapterTree({ bookId }: ChapterTreeProps) {
     });
   };
 
-  /** 打开删除确认：调用 checkReferences 检测引用影响 */
+  /** 打开删除确认：记录章节 + 由 Hook 检测引用影响 */
   const handleDeleteClick = async (chapter: Chapter): Promise<void> => {
     setConfirmDelete(chapter);
-    const impact = await checkReferences('chapter', chapter.id, bookId);
-    setDeleteImpact(impact);
+    await requestDelete('chapter', chapter.id, bookId);
   };
 
   /** 确认删除章节 */
@@ -261,7 +259,8 @@ export function ChapterTree({ bookId }: ChapterTreeProps) {
             onDragEnd={handleDragEnd}
           >
             {groups.map((group) => {
-              const volId = group.volume?.id ?? '__ungrouped__';
+              const volume = group.volume;
+              const volId = volume?.id ?? '__ungrouped__';
               const isCollapsed = collapsedVolumes.has(volId);
               return (
                 <div key={volId} className="mb-2">
@@ -279,7 +278,7 @@ export function ChapterTree({ bookId }: ChapterTreeProps) {
                       aria-hidden="true"
                     />
                     <span className="flex-1 truncate text-sm font-semibold text-foreground">
-                      {group.volume?.title ?? '未分卷'}
+                      {volume?.title ?? '未分卷'}
                     </span>
                     <span className="font-mono text-[12px] text-muted-foreground">
                       {group.items.length}
@@ -308,10 +307,10 @@ export function ChapterTree({ bookId }: ChapterTreeProps) {
                   )}
 
                   {/* 卷宗内新建章节 */}
-                  {!isCollapsed && group.volume && (
+                  {!isCollapsed && volume && (
                     <button
                       type="button"
-                      onClick={() => handleNewChapter(group.volume!.id)}
+                      onClick={() => handleNewChapter(volume.id)}
                       className="ml-4 mt-1 flex items-center gap-1 rounded px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     >
                       <Plus className="h-3 w-3" aria-hidden="true" />
@@ -337,7 +336,7 @@ export function ChapterTree({ bookId }: ChapterTreeProps) {
         onConfirm={() => void handleConfirmDelete()}
         onClose={() => {
           setConfirmDelete(null);
-          setDeleteImpact(null);
+          cancelDelete();
         }}
       />
     </aside>
