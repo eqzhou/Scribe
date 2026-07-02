@@ -11,9 +11,12 @@
  * 保存时调用 bookRepository.create 或 update，并触发 onSaved 回调。
  */
 import { useEffect, useState } from 'react';
+import { Sparkles, Loader2 } from 'lucide-react';
 import { Modal } from '../../components/ui';
 import { Button, Input, Textarea } from '../../components/ui';
 import { bookRepository } from '../../lib/repositories';
+import { executeWorldviewBatch } from '../../lib/aiTools';
+import { useToastStore } from '../../stores';
 import type { Book } from '../../types';
 import { cn } from '../../utils/cn';
 
@@ -78,7 +81,9 @@ interface BookFormState {
 export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
   const [form, setForm] = useState<BookFormState>(DEFAULT_FORM);
   const [submitting, setSubmitting] = useState(false);
+  const [generatingWorld, setGeneratingWorld] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pushToast = useToastStore((s) => s.pushToast);
 
   // book 变化或弹窗打开时同步表单
   useEffect(() => {
@@ -148,6 +153,51 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
       setError(err instanceof Error ? err.message : '保存失败');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  /** 创建作品并立即 AI 生成 6 大分类世界观 */
+  const handleCreateWithWorldview = async (): Promise<void> => {
+    if (!form.title.trim()) {
+      setError('请填写作品名称');
+      return;
+    }
+    if (!form.synopsis.trim()) {
+      setError('请填写作品简介，AI 需要简介才能生成世界观');
+      return;
+    }
+    if (form.targetWords <= 0 || form.dailyGoal <= 0) {
+      setError('目标字数与每日目标需为正数');
+      return;
+    }
+
+    setGeneratingWorld(true);
+    setError(null);
+    try {
+      // 1. 先创建作品
+      const saved = await bookRepository.create({
+        title: form.title.trim(),
+        subtitle: form.subtitle.trim(),
+        synopsis: form.synopsis.trim(),
+        genre: form.genre,
+        targetWords: form.targetWords,
+        coverColor: form.coverColor,
+        dailyGoal: form.dailyGoal,
+      });
+      // 2. 调用 AI 批量生成世界观（直接写入 db.worldview）
+      await executeWorldviewBatch(
+        saved.id,
+        saved.title,
+        saved.synopsis,
+        saved.genre,
+      );
+      pushToast('success', '作品已创建，世界观已生成');
+      onSaved(saved);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '生成失败');
+    } finally {
+      setGeneratingWorld(false);
     }
   };
 
@@ -282,14 +332,37 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
 
         {/* 操作区 */}
         <div className="flex items-center justify-end gap-2 pt-2">
-          <Button variant="ghost" size="md" onClick={onClose} disabled={submitting}>
+          <Button variant="ghost" size="md" onClick={onClose} disabled={submitting || generatingWorld}>
             取消
           </Button>
+          {/* 新建模式下额外提供"创建并 AI 生成世界观"按钮 */}
+          {!book && (
+            <button
+              type="button"
+              onClick={handleCreateWithWorldview}
+              disabled={submitting || generatingWorld}
+              className={cn(
+                'flex items-center gap-1.5 rounded border border-secondary/40 bg-secondary/5 px-3 py-2',
+                'font-serif text-sm text-secondary transition-all',
+                'hover:bg-secondary/10 hover:shadow-soft',
+                'disabled:cursor-not-allowed disabled:opacity-50',
+              )}
+              title="创建作品并调用 AI 自动生成 6 大分类世界观"
+            >
+              {generatingWorld ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              {generatingWorld ? '生成中…' : '创建并生成世界观'}
+            </button>
+          )}
           <Button
             variant="primary"
             size="md"
             onClick={handleSubmit}
             loading={submitting}
+            disabled={generatingWorld}
           >
             {book ? '保存修改' : '创建作品'}
           </Button>

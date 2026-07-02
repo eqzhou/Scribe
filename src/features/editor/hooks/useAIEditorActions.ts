@@ -13,7 +13,12 @@
 import { useState } from 'react';
 import type { Editor } from '@tiptap/react';
 import { db } from '../../../lib/db';
-import { executeContinue, executeRewrite, executeFulltextEditor } from '../../../lib/aiTools';
+import {
+  executeContinue,
+  executeRewrite,
+  executeFulltextEditor,
+  executeCharacterExtract,
+} from '../../../lib/aiTools';
 import { useAIStore, useToastStore } from '../../../stores';
 import type { RewriteStyle } from '../../../types/ai';
 
@@ -139,6 +144,22 @@ export function useAIEditorActions({
         book.title,
         book.synopsis,
       );
+
+      // 全文生成完成后，异步触发角色提取（不阻塞主流程，失败静默处理）
+      // 使用 setTimeout 等待 ghost text 内容稳定，再用编辑器纯文本做提取
+      setTimeout(async () => {
+        try {
+          const content = editor.getText();
+          if (!content || content.length < 50) return;
+          await executeCharacterExtract(
+            book.id,
+            chapterTitle,
+            content.slice(0, 8000), // 限制长度，避免超长内容
+          );
+        } catch {
+          // 角色提取失败不影响主流程，错误已在 executeCharacterExtract 内 toast
+        }
+      }, 1500);
     } catch {
       // 错误已在 executeFulltextEditor 内通过 toast 提示
     }

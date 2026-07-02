@@ -13,13 +13,15 @@
  */
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { X } from 'lucide-react';
+import { X, Sparkles, Loader2 } from 'lucide-react';
 import { db } from '../../lib/db';
 import {
   characterRepository,
   relationRepository,
   worldviewRepository,
 } from '../../lib/repositories';
+import { executeCharacterGenerate } from '../../lib/aiTools';
+import { useToastStore, useBookStore } from '../../stores';
 import { syncCharacterWorldviewRelations } from '../../lib/relationSync';
 import { useDeleteWithImpact } from '../../hooks/useDeleteWithImpact';
 import type {
@@ -79,7 +81,13 @@ export function CharacterForm({
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [generating, setGenerating] = useState(false);
   const [newRel, setNewRel] = useState<NewRelationState>(EMPTY_NEW_RELATION);
+  const pushToast = useToastStore((s) => s.pushToast);
+  const currentBookId = useBookStore((s) => s.currentBookId);
+  const books = useBookStore((s) => s.books);
+  const currentBook = books.find((b) => b.id === currentBookId) ?? books.find((b) => b.id === bookId);
   /** 姓名变更提示信息（保存后若有章节引用则弹出） */
   const [nameChangeInfo, setNameChangeInfo] = useState<NameChangeInfo | null>(
     null,
@@ -222,6 +230,51 @@ export function CharacterForm({
     }
   };
 
+  /** AI 生成角色档案：基于用户 prompt 填充表单字段（不入库） */
+  const handleAiGenerate = async (): Promise<void> => {
+    if (!aiPrompt.trim()) {
+      pushToast('warning', '请输入 AI 生成需求');
+      return;
+    }
+    if (!currentBook) {
+      pushToast('error', '未找到当前作品信息');
+      return;
+    }
+    setGenerating(true);
+    setError(null);
+    try {
+      const result = await executeCharacterGenerate(
+        aiPrompt.trim(),
+        bookId,
+        currentBook.title,
+        currentBook.synopsis,
+        currentBook.genre,
+      );
+      if (result) {
+        // 用 AI 结果填充表单字段（保留用户已填的姓名等关键字段）
+        setForm((prev) => ({
+          ...prev,
+          name: prev.name || result.name || '',
+          alias: result.alias || prev.alias,
+          faction: result.faction || prev.faction,
+          role: (['protagonist', 'supporting', 'antagonist', 'minor'].includes(result.role)
+            ? result.role
+            : prev.role) as CharacterFormState['role'],
+          appearance: result.appearance || prev.appearance,
+          personality: result.personality || prev.personality,
+          background: result.background || prev.background,
+          arc: result.arc || prev.arc,
+          tags: Array.isArray(result.tags) && result.tags.length > 0 ? result.tags : prev.tags,
+        }));
+        pushToast('success', 'AI 已生成角色档案，请检查后保存');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'AI 生成失败');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   /** 触发删除确认：由 Hook 打开弹窗并检测引用影响 */
   const handleDelete = async (): Promise<void> => {
     if (!character) return;
@@ -307,6 +360,43 @@ export function CharacterForm({
     <>
       <Modal open={open} onClose={onClose} title={title} width="800px">
         <div className="flex flex-col gap-5">
+          {/* ============ AI 生成区（仅新建模式显示） ============ */}
+          {!isEditing && (
+            <section className="rounded border border-secondary/30 bg-secondary/5 p-3">
+              <label className="mb-1.5 block font-serif text-sm text-foreground">
+                <Sparkles className="mr-1 inline h-3.5 w-3.5 text-secondary" aria-hidden="true" />
+                AI 生成角色
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder="如：主角的师父，性格严厉但内心慈祥，武功盖世"
+                  className="flex-1 rounded border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-secondary focus:outline-none"
+                  disabled={generating}
+                />
+                <button
+                  type="button"
+                  onClick={handleAiGenerate}
+                  disabled={generating}
+                  className="flex items-center gap-1.5 rounded border border-secondary/40 bg-secondary/10 px-3 py-2 text-sm text-secondary transition-all hover:bg-secondary/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  title="基于需求描述调用 AI 生成角色档案"
+                >
+                  {generating ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  {generating ? '生成中…' : 'AI 生成'}
+                </button>
+              </div>
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                输入角色需求，AI 将自动填充下方各字段，生成后请检查并保存
+              </p>
+            </section>
+          )}
+
           {/* ============ 基本信息区 ============ */}
           <CharacterBasicInfoSection form={form} updateField={updateField} />
 

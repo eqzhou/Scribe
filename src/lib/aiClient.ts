@@ -12,6 +12,12 @@ import type {
   FulltextRequest,
   DialogueRequest,
   WorldviewRequest,
+  WorldviewBatchRequest,
+  WorldviewBatchItem,
+  CharacterGenerateRequest,
+  CharacterGenerateResult,
+  CharacterExtractRequest,
+  CharacterExtractItem,
   OutlineItem,
   OnStreamChunk,
   OnStreamDone,
@@ -164,6 +170,104 @@ export async function streamOutline(
         onDone(items);
       } catch {
         onDone([{ title: '生成结果', summary: raw, keyEvents: [] }]);
+      }
+    },
+    onError,
+    signal,
+  );
+}
+
+/**
+ * 批量世界观构建：基于书籍信息一次性生成 6 大分类的世界观条目。
+ *
+ * 后端返回 SSE，每个 chunk 是 JSON 文本片段，拼接后 JSON.parse 为 WorldviewBatchItem[]。
+ */
+export async function streamWorldviewBatch(
+  req: WorldviewBatchRequest,
+  onChunk: OnStreamChunk,
+  onDone: (items: WorldviewBatchItem[]) => void,
+  onError: OnStreamError,
+  signal?: AbortSignal,
+): Promise<void> {
+  let raw = '';
+  await streamRequest(
+    '/worldview-batch',
+    req,
+    (chunk) => {
+      raw += chunk;
+      onChunk(chunk);
+    },
+    () => {
+      try {
+        const items = JSON.parse(raw) as WorldviewBatchItem[];
+        onDone(items);
+      } catch {
+        onDone([]);
+      }
+    },
+    onError,
+    signal,
+  );
+}
+
+/**
+ * 角色生成：基于用户 prompt 生成单个角色档案。
+ *
+ * 后端返回 SSE，拼接后 JSON.parse 为 CharacterGenerateResult。
+ */
+export async function streamCharacterGenerate(
+  req: CharacterGenerateRequest,
+  onChunk: OnStreamChunk,
+  onDone: (result: CharacterGenerateResult | null) => void,
+  onError: OnStreamError,
+  signal?: AbortSignal,
+): Promise<void> {
+  let raw = '';
+  await streamRequest(
+    '/character-generate',
+    req,
+    (chunk) => {
+      raw += chunk;
+      onChunk(chunk);
+    },
+    () => {
+      try {
+        onDone(JSON.parse(raw) as CharacterGenerateResult);
+      } catch {
+        onDone(null);
+      }
+    },
+    onError,
+    signal,
+  );
+}
+
+/**
+ * 角色提取：从章节正文提取未入库的角色。
+ *
+ * 后端返回 SSE，拼接后 JSON.parse 为 CharacterExtractItem[]。
+ */
+export async function streamCharacterExtract(
+  req: CharacterExtractRequest,
+  onChunk: OnStreamChunk,
+  onDone: (items: CharacterExtractItem[]) => void,
+  onError: OnStreamError,
+  signal?: AbortSignal,
+): Promise<void> {
+  let raw = '';
+  await streamRequest(
+    '/character-extract',
+    req,
+    (chunk) => {
+      raw += chunk;
+      onChunk(chunk);
+    },
+    () => {
+      try {
+        const items = JSON.parse(raw) as CharacterExtractItem[];
+        onDone(items);
+      } catch {
+        onDone([]);
       }
     },
     onError,

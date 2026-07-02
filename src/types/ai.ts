@@ -7,14 +7,17 @@
 
 /** AI 任务类型 */
 export type AITaskType =
-  | 'continue'    // 续写
-  | 'rewrite'     // 改写
-  | 'polish'      // 润色
-  | 'expand'      // 扩写
-  | 'outline'     // 章节大纲
-  | 'fulltext'    // 全文生成
-  | 'dialogue'    // 角色对话
-  | 'worldview';  // 世界观构建
+  | 'continue'             // 续写
+  | 'rewrite'              // 改写
+  | 'polish'               // 润色
+  | 'expand'               // 扩写
+  | 'outline'              // 章节大纲
+  | 'fulltext'             // 全文生成
+  | 'dialogue'             // 角色对话
+  | 'worldview'            // 世界观构建
+  | 'worldview-batch'      // 批量世界观构建（作品创建时）
+  | 'character-generate'   // 角色生成（基于 prompt）
+  | 'character-extract';   // 角色提取（从章节正文）
 
 /** 改写风格 */
 export type RewriteStyle = '冷峻' | '华丽' | '白描' | '幽默' | '悲怆' | '热血';
@@ -75,6 +78,59 @@ export interface WorldviewRequest {
   category: string;
   topic: string;
   existing: Array<{ title: string; content: string }>;
+}
+
+/** 批量世界观构建请求体（作品创建时一次性生成 6 大分类） */
+export interface WorldviewBatchRequest {
+  bookTitle: string;
+  synopsis: string;
+  genre: string;
+}
+
+/** 批量世界观条目（生成结果） */
+export interface WorldviewBatchItem {
+  category: string;
+  title: string;
+  content: string;
+  tags: string[];
+}
+
+/** 角色生成请求体（基于用户 prompt） */
+export interface CharacterGenerateRequest {
+  prompt: string;
+  bookTitle: string;
+  synopsis: string;
+  genre: string;
+  existingCharacters?: Array<{ name: string; role: string }>;
+}
+
+/** 角色生成结果（对齐 Character 表字段） */
+export interface CharacterGenerateResult {
+  name: string;
+  alias: string;
+  faction: string;
+  role: string;
+  appearance: string;
+  personality: string;
+  background: string;
+  arc: string;
+  tags: string[];
+}
+
+/** 角色提取请求体（从章节正文提取） */
+export interface CharacterExtractRequest {
+  chapterTitle: string;
+  chapterContent: string;
+  existingCharacters?: Array<{ name: string; alias?: string }>;
+}
+
+/** 角色提取结果 */
+export interface CharacterExtractItem {
+  name: string;
+  role: string;
+  appearance: string;
+  personality: string;
+  background: string;
 }
 
 /** 章节大纲条目（大纲生成结果） */

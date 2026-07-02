@@ -10,6 +10,9 @@ import {
   buildFulltextMessages,
   buildDialogueMessages,
   buildWorldviewMessages,
+  buildWorldviewBatchMessages,
+  buildCharacterGenerateMessages,
+  buildCharacterExtractMessages,
   type AIContext,
   type ChatMessage,
 } from '../prompts/index.js';
@@ -273,3 +276,84 @@ router.post('/outline', async (req: Request, res: Response) => {
     handleStreamError(res, err);
   }
 });
+
+/**
+ * 创建一个非流式 JSON 生成路由（chat + 分段 SSE 回传完整文本）。
+ *
+ * 用于需要返回结构化 JSON 的端点：worldview-batch / character-generate / character-extract。
+ * 前端通过 streamRequest 拼接完整文本后 JSON.parse。
+ */
+function createJsonRoute<TBody>(
+  buildMessages: (body: TBody) => ChatMessage[],
+  requiredFields: string[],
+): (req: Request, res: Response) => Promise<void> {
+  return async (req: Request, res: Response) => {
+    try {
+      const body = req.body as TBody;
+      for (const field of requiredFields) {
+        if (!(body as Record<string, unknown>)[field]) {
+          res
+            .status(400)
+            .json({ error: `缺少必填字段 ${field}`, code: '400' });
+          return;
+        }
+      }
+      const messages = buildMessages(body);
+      const modelConfig = resolveActiveModelConfig();
+      const full = await chat(messages, { temperature: 0.8 }, modelConfig);
+      setSSEHeaders(res);
+      const SEGMENT_SIZE = 512;
+      for (let i = 0; i < full.length; i += SEGMENT_SIZE) {
+        res.write(`data: ${JSON.stringify({ text: full.slice(i, i + SEGMENT_SIZE) })}\n\n`);
+        flush(res);
+      }
+      res.write('data: [DONE]\n\n');
+      flush(res);
+      res.end();
+    } catch (err) {
+      handleStreamError(res, err);
+    }
+  };
+}
+
+// 批量世界观构建：基于书籍信息一次性生成 6 大分类的世界观条目
+router.post('/worldview-batch', createJsonRoute<{
+  bookTitle: string;
+  synopsis: string;
+  genre: string;
+}>(
+  (body) => buildWorldviewBatchMessages(body.bookTitle, body.synopsis ?? '', body.genre ?? '其他'),
+  ['bookTitle'],
+));
+
+// 角色生成：基于用户 prompt 生成单个角色档案
+router.post('/character-generate', createJsonRoute<{
+  prompt: string;
+  bookTitle: string;
+  synopsis: string;
+  genre: string;
+  existingCharacters?: Array<{ name: string; role: string }>;
+}>(
+  (body) => buildCharacterGenerateMessages(
+    body.prompt,
+    body.bookTitle,
+    body.synopsis ?? '',
+    body.genre ?? '其他',
+    body.existingCharacters ?? [],
+  ),
+  ['prompt', 'bookTitle'],
+));
+
+// 角色提取：从章节正文提取未入库的角色
+router.post('/character-extract', createJsonRoute<{
+  chapterTitle: string;
+  chapterContent: string;
+  existingCharacters?: Array<{ name: string; alias?: string }>;
+}>(
+  (body) => buildCharacterExtractMessages(
+    body.chapterTitle,
+    body.chapterContent ?? '',
+    body.existingCharacters ?? [],
+  ),
+  ['chapterTitle', 'chapterContent'],
+));

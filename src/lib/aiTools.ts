@@ -5,7 +5,14 @@
  * 构造 AIContext 供 aiClient 使用。
  */
 import { db } from './db';
-import type { AIContext, OutlineItem, RewriteStyle } from '../types/ai';
+import type {
+  AIContext,
+  OutlineItem,
+  RewriteStyle,
+  WorldviewBatchItem,
+  CharacterGenerateResult,
+  CharacterExtractItem,
+} from '../types/ai';
 import {
   streamContinue,
   streamRewrite,
@@ -13,8 +20,31 @@ import {
   streamFulltext,
   streamDialogue,
   streamWorldview,
+  streamWorldviewBatch,
+  streamCharacterGenerate,
+  streamCharacterExtract,
 } from './aiClient';
 import { useToastStore } from '../stores';
+import { worldviewRepository, characterRepository } from './repositories';
+import type { WorldviewCategory, CharacterRole } from '../types';
+
+/** 合法的世界观分类白名单（用于校验 AI 返回值） */
+const VALID_WV_CATEGORIES: ReadonlySet<string> = new Set([
+  'geography',
+  'history',
+  'faction',
+  'system',
+  'culture',
+  'item',
+]);
+
+/** 合法的角色类型白名单 */
+const VALID_ROLES: ReadonlySet<string> = new Set([
+  'protagonist',
+  'supporting',
+  'antagonist',
+  'minor',
+]);
 
 /** 从作品 ID 构建 AI 上下文（角色 + 世界观摘要） */
 export async function buildAIContext(
@@ -341,4 +371,188 @@ export async function executeWorldview(
     signal,
   );
   return full;
+}
+
+/**
+ * 执行批量世界观构建任务，并把结果直接写入 db.worldview 表。
+ *
+ * 用于作品创建时一键生成 6 大分类的初始世界观。
+ * 返回入库后的 WorldviewEntry 数组。
+ */
+export async function executeWorldviewBatch(
+  bookId: string,
+  bookTitle: string,
+  synopsis: string,
+  genre: string,
+  onProgress?: (text: string) => void,
+  signal?: AbortSignal,
+): Promise<number> {
+  return new Promise((resolve, reject) => {
+    streamWorldviewBatch(
+      { bookTitle, synopsis, genre },
+      (chunk) => onProgress?.(chunk),
+      async (items: WorldviewBatchItem[]) => {
+        try {
+          if (!items || items.length === 0) {
+            useToastStore.getState().pushToast('warning', 'AI 未返回有效世界观条目');
+            resolve(0);
+            return;
+          }
+          let inserted = 0;
+          for (const item of items) {
+            // 校验 category 合法性
+            const category = VALID_WV_CATEGORIES.has(item.category)
+              ? (item.category as WorldviewCategory)
+              : 'culture';
+            // content 包装为 HTML 段落
+            const htmlContent = `<p>${(item.content || '').split(/\n/).filter(Boolean).join('</p><p>')}</p>`;
+            await worldviewRepository.create({
+              bookId,
+              category,
+              title: item.title || '未命名条目',
+              content: htmlContent,
+              tags: Array.isArray(item.tags) ? item.tags.slice(0, 6) : [],
+              relatedCharacterIds: [],
+              relatedSceneIds: [],
+            });
+            inserted++;
+          }
+          useToastStore.getState().pushToast('success', `已生成 ${inserted} 个世界观条目`);
+          resolve(inserted);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          useToastStore.getState().pushToast('error', `世界观入库失败：${msg}`);
+          reject(err);
+        }
+      },
+      (err) => {
+        useToastStore.getState().pushToast('error', `AI 批量世界观生成失败：${err.message}`);
+        reject(err);
+      },
+      signal,
+    );
+  });
+}
+
+/**
+ * 执行角色生成任务，返回 CharacterGenerateResult（不入库，由调用方决定）。
+ *
+ * 用于 CharacterForm 的"AI 生成"按钮：基于用户 prompt 填充表单字段。
+ */
+export async function executeCharacterGenerate(
+  prompt: string,
+  bookId: string,
+  bookTitle: string,
+  synopsis: string,
+  genre: string,
+  onProgress?: (text: string) => void,
+  signal?: AbortSignal,
+): Promise<CharacterGenerateResult | null> {
+  // 拉取已有角色列表用于上下文
+  const existing = await db.characters.where('bookId').equals(bookId).toArray();
+  return new Promise((resolve, reject) => {
+    streamCharacterGenerate(
+      {
+        prompt,
+        bookTitle,
+        synopsis,
+        genre,
+        existingCharacters: existing.map((c) => ({ name: c.name, role: c.role })),
+      },
+      (chunk) => onProgress?.(chunk),
+      (result) => {
+        if (!result) {
+          useToastStore.getState().pushToast('warning', 'AI 未返回有效角色档案');
+        }
+        resolve(result);
+      },
+      (err) => {
+        useToastStore.getState().pushToast('error', `AI 角色生成失败：${err.message}`);
+        reject(err);
+      },
+      signal,
+    );
+  });
+}
+
+/**
+ * 执行角色提取任务，从章节正文提取未入库的角色并写入 db.characters 表。
+ *
+ * 用于章节 AI 全文生成完成后自动触发：比对已有角色名，仅入库新角色。
+ * 返回新入库的角色数。
+ */
+export async function executeCharacterExtract(
+  bookId: string,
+  chapterTitle: string,
+  chapterContent: string,
+  onProgress?: (text: string) => void,
+  signal?: AbortSignal,
+): Promise<number> {
+  const existing = await db.characters.where('bookId').equals(bookId).toArray();
+  const existingNames = new Set(existing.map((c) => c.name));
+  if (existing.length > 0) {
+    // 把别名也加入比对集合
+    for (const c of existing) {
+      if (c.alias) existingNames.add(c.alias);
+    }
+  }
+
+  return new Promise((resolve, reject) => {
+    streamCharacterExtract(
+      {
+        chapterTitle,
+        chapterContent,
+        existingCharacters: existing.map((c) => ({ name: c.name, alias: c.alias })),
+      },
+      (chunk) => onProgress?.(chunk),
+      async (items: CharacterExtractItem[]) => {
+        try {
+          if (!items || items.length === 0) {
+            resolve(0);
+            return;
+          }
+          let inserted = 0;
+          for (const item of items) {
+            // 跳过同名已有角色
+            if (!item.name || existingNames.has(item.name)) continue;
+            const role = VALID_ROLES.has(item.role)
+              ? (item.role as CharacterRole)
+              : 'supporting';
+            await characterRepository.create({
+              bookId,
+              name: item.name,
+              alias: '',
+              faction: '',
+              role,
+              appearance: item.appearance || '',
+              personality: item.personality || '',
+              background: item.background || '',
+              arc: '',
+              tags: [],
+              relatedWorldviewIds: [],
+              appearanceColor: '#7a8ca0',
+            });
+            existingNames.add(item.name);
+            inserted++;
+          }
+          if (inserted > 0) {
+            useToastStore.getState().pushToast(
+              'success',
+              `已从本章提取 ${inserted} 个新角色入库`,
+            );
+          }
+          resolve(inserted);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          useToastStore.getState().pushToast('error', `角色入库失败：${msg}`);
+          reject(err);
+        }
+      },
+      (err) => {
+        useToastStore.getState().pushToast('error', `AI 角色提取失败：${err.message}`);
+        reject(err);
+      },
+      signal,
+    );
+  });
 }

@@ -223,3 +223,97 @@ ${existingPart}
     { role: 'user', content: user },
   ];
 }
+
+/**
+ * 批量世界观构建：基于书籍元信息一次性生成 6 大分类的世界观条目。
+ *
+ * 用于作品创建时一键生成初始世界观。输出 JSON 数组，每个元素：
+ * {category, title, content, tags}，category 取值 geography/history/faction/system/culture/item。
+ */
+export function buildWorldviewBatchMessages(
+  bookTitle: string,
+  synopsis: string,
+  genre: string
+): ChatMessage[] {
+  const system =
+    '你是专业小说世界观架构师。根据书籍信息一次性为 6 大分类（地理/历史/阵营/体系/文化/物品）各生成 1 个核心世界观条目。输出 JSON 数组，每个元素形如 {"category":"","title":"","content":"","tags":[]}，category 必须是 geography/history/faction/system/culture/item 之一，content 为 200-400 字的详细设定，tags 为 2-4 个关键词。只输出 JSON，不要解释，不要包裹在代码块中。';
+  const user = `【书籍信息】
+书名：${bookTitle}
+类型：${genre}
+简介：${synopsis}
+
+请为该书生成 6 个世界观条目（每个分类一个）。`;
+  return [
+    { role: 'system', content: system },
+    { role: 'user', content: user },
+  ];
+}
+
+/**
+ * 角色生成：基于用户 prompt 与书籍上下文生成单个角色档案。
+ *
+ * 输出 JSON 对象，字段对齐 Character 表结构：
+ * {name, alias, faction, role, appearance, personality, background, arc, tags}
+ */
+export function buildCharacterGenerateMessages(
+  prompt: string,
+  bookTitle: string,
+  synopsis: string,
+  genre: string,
+  existingCharacters: Array<{ name: string; role: string }>
+): ChatMessage[] {
+  const system =
+    '你是专业小说角色设计师。根据用户 prompt 与书籍信息生成一个角色档案。输出 JSON 对象 {"name":"","alias":"","faction":"","role":"","appearance":"","personality":"","background":"","arc":"","tags":[]}，role 必须是 protagonist/supporting/antagonist/minor 之一，appearance/personality/background/arc 各 80-200 字，tags 为 2-5 个关键词。只输出 JSON，不要解释，不要包裹在代码块中。';
+  const existingPart =
+    existingCharacters && existingCharacters.length > 0
+      ? existingCharacters.map((c) => `- ${c.name}（${c.role}）`).join('\n')
+      : '无';
+  const user = `【书籍信息】
+书名：${bookTitle}
+类型：${genre}
+简介：${synopsis}
+
+【已有角色】
+${existingPart}
+
+【用户需求】
+${prompt}
+
+请生成一个角色档案 JSON。`;
+  return [
+    { role: 'system', content: system },
+    { role: 'user', content: user },
+  ];
+}
+
+/**
+ * 角色提取：从章节正文提取未入库的角色。
+ *
+ * 输出 JSON 数组，每个元素 {name, role, appearance, personality, background}。
+ * 由前端比对已有角色，仅入库新角色。
+ */
+export function buildCharacterExtractMessages(
+  chapterTitle: string,
+  chapterContent: string,
+  existingCharacters: Array<{ name: string; alias?: string }>
+): ChatMessage[] {
+  const system =
+    '你是小说角色提取助手。从章节正文中识别登场人物，排除已有角色，输出新角色档案。输出 JSON 数组，每个元素 {"name":"","role":"","appearance":"","personality":"","background":""}，role 必须是 protagonist/supporting/antagonist/minor 之一，appearance/personality/background 各 50-150 字。若章节中无新角色，输出空数组 []。只输出 JSON，不要解释，不要包裹在代码块中。';
+  const existingPart =
+    existingCharacters && existingCharacters.length > 0
+      ? existingCharacters.map((c) => `- ${c.name}${c.alias ? `（${c.alias}）` : ''}`).join('\n')
+      : '无';
+  const user = `【章节标题】${chapterTitle}
+
+【已有角色（请排除）】
+${existingPart}
+
+【章节正文】
+${chapterContent}
+
+请提取章节中未在已有列表中的新角色，输出 JSON 数组。`;
+  return [
+    { role: 'system', content: system },
+    { role: 'user', content: user },
+  ];
+}
