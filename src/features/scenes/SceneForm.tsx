@@ -12,9 +12,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { Trash2 } from 'lucide-react';
 import { db } from '../../lib/db';
 import { sceneRepository } from '../../lib/repositories';
-import { checkReferences } from '../../lib/referenceChecker';
+import { useDeleteWithImpact } from '../../hooks/useDeleteWithImpact';
 import type { Chapter, Character, Scene, WorldviewEntry } from '../../types';
-import type { ImpactInfo } from '../../components/ui';
 import { cn } from '../../utils/cn';
 import { Modal, Button, Input, Textarea, ConfirmDialog } from '../../components/ui';
 
@@ -72,8 +71,14 @@ export function SceneForm({
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [deleteImpact, setDeleteImpact] = useState<ImpactInfo | null>(null);
+
+  // 删除影响检测：复用通用 Hook（打开确认弹窗 + 检测引用影响）
+  const {
+    confirmOpen,
+    deleteImpact,
+    requestDelete,
+    cancelDelete,
+  } = useDeleteWithImpact();
 
   const isEditing = Boolean(scene);
 
@@ -119,7 +124,7 @@ export function SceneForm({
       setForm(DEFAULT_FORM);
     }
     setError(null);
-    setDeleteImpact(null);
+    cancelDelete();
   }, [open, scene]);
 
   /** 通用字段更新 */
@@ -176,13 +181,10 @@ export function SceneForm({
     }
   };
 
-  /** 触发删除确认：先检测引用影响 */
+  /** 触发删除确认：由 Hook 打开弹窗并检测引用影响 */
   const handleDelete = async (): Promise<void> => {
     if (!scene) return;
-    setConfirmOpen(true);
-    setDeleteImpact(null);
-    const impact = await checkReferences('scene', scene.id, bookId);
-    setDeleteImpact(impact);
+    await requestDelete('scene', scene.id, bookId);
   };
 
   /** 确认删除 */
@@ -371,8 +373,7 @@ export function SceneForm({
         open={confirmOpen}
         onClose={() => {
           if (deleting) return;
-          setConfirmOpen(false);
-          setDeleteImpact(null);
+          cancelDelete();
         }}
         onConfirm={handleDeleteConfirm}
         title="删除场景"

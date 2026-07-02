@@ -10,9 +10,8 @@ import { useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { db } from '../../lib/db';
 import { plotLineRepository, plotPointRepository } from '../../lib/repositories';
-import { checkReferences } from '../../lib/referenceChecker';
+import { useDeleteWithImpact } from '../../hooks/useDeleteWithImpact';
 import type { PlotLine, PlotLineStatus, PlotLineType } from '../../types';
-import type { ImpactInfo } from '../../components/ui';
 import { cn } from '../../utils/cn';
 import { Modal, Button, Input, Textarea, ConfirmDialog } from '../../components/ui';
 
@@ -87,8 +86,14 @@ export function PlotLineForm({
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [deleteImpact, setDeleteImpact] = useState<ImpactInfo | null>(null);
+
+  // 删除影响检测：复用通用 Hook（打开确认弹窗 + 检测引用影响）
+  const {
+    confirmOpen,
+    deleteImpact,
+    requestDelete,
+    cancelDelete,
+  } = useDeleteWithImpact();
 
   const isEditing = Boolean(plotLine);
 
@@ -106,7 +111,7 @@ export function PlotLineForm({
       setForm(DEFAULT_FORM);
     }
     setError(null);
-    setDeleteImpact(null);
+    cancelDelete();
   }, [open, plotLine]);
 
   /** 通用字段更新 */
@@ -149,13 +154,10 @@ export function PlotLineForm({
     }
   };
 
-  /** 触发删除确认：先检测引用影响 */
+  /** 触发删除确认：由 Hook 打开弹窗并检测引用影响 */
   const handleDelete = async (): Promise<void> => {
     if (!plotLine) return;
-    setConfirmOpen(true);
-    setDeleteImpact(null);
-    const impact = await checkReferences('plotLine', plotLine.id, bookId);
-    setDeleteImpact(impact);
+    await requestDelete('plotLine', plotLine.id, bookId);
   };
 
   /** 确认删除：删除关联剧情节点 + 剧情线本身 */
@@ -301,8 +303,7 @@ export function PlotLineForm({
         open={confirmOpen}
         onClose={() => {
           if (deleting) return;
-          setConfirmOpen(false);
-          setDeleteImpact(null);
+          cancelDelete();
         }}
         onConfirm={handleDeleteConfirm}
         title="删除剧情线"

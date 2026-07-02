@@ -205,9 +205,9 @@ async function importBookData(bookData: ExportedBook): Promise<void> {
 
 /**
  * 级联删除指定作品及其全部关联实体。
- * 用于 overwrite 模式下清理旧数据。
+ * 用于 overwrite 模式下清理旧数据，以及 ProjectsPage 删除作品。
  */
-async function deleteBookCascade(bookId: string): Promise<void> {
+export async function deleteBookCascade(bookId: string): Promise<void> {
   await db.transaction('rw', ALL_TABLES, async () => {
     await db.books.delete(bookId);
     await db.worldview.where('bookId').equals(bookId).delete();

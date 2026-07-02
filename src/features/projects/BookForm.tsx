@@ -198,7 +198,14 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
     } catch (err) {
       // AI 生成失败时回滚：删除刚创建的空作品，避免重复创建
       if (saved) {
-        await bookRepository.delete(saved.id).catch(() => {});
+        try {
+          await bookRepository.delete(saved.id);
+        } catch (rollbackErr) {
+          pushToast(
+            'error',
+            `回滚空作品失败：${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`,
+          );
+        }
       }
       setError(err instanceof Error ? err.message : '生成失败');
     } finally {

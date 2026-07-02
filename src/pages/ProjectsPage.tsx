@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Plus } from 'lucide-react';
 import { db } from '../lib/db';
+import { deleteBookCascade } from '../lib/importer';
 import { useBookStore } from '../stores';
 import type { Book } from '../types';
 import { Button, ConfirmDialog, EmptyState, SkeletonGrid } from '../components/ui';
@@ -105,39 +106,7 @@ export default function ProjectsPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const bookId = deleteTarget.book.id;
-      // 级联删除：作品 + 所有关联实体（事务保证原子性）
-      await db.transaction(
-        'rw',
-        [
-          db.books,
-          db.chapters,
-          db.characters,
-          db.worldview,
-          db.scenes,
-          db.plotLines,
-          db.plotPoints,
-          db.foreshadowing,
-          db.volumes,
-          db.inspiration,
-          db.writingLogs,
-          db.relations,
-        ],
-        async () => {
-          await db.books.delete(bookId);
-          await db.chapters.where('bookId').equals(bookId).delete();
-          await db.characters.where('bookId').equals(bookId).delete();
-          await db.worldview.where('bookId').equals(bookId).delete();
-          await db.scenes.where('bookId').equals(bookId).delete();
-          await db.plotLines.where('bookId').equals(bookId).delete();
-          await db.plotPoints.where('bookId').equals(bookId).delete();
-          await db.foreshadowing.where('bookId').equals(bookId).delete();
-          await db.volumes.where('bookId').equals(bookId).delete();
-          await db.inspiration.where('bookId').equals(bookId).delete();
-          await db.writingLogs.where('bookId').equals(bookId).delete();
-          await db.relations.where('bookId').equals(bookId).delete();
-        },
-      );
+      await deleteBookCascade(deleteTarget.book.id);
       setDeleteTarget(null);
       // 刷新 store：refreshBooks 内部会修正 currentBookId 的合法性
       await refreshBooks();
@@ -191,7 +160,7 @@ export default function ProjectsPage() {
             gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
           }}
         >
-          {books!.map((book) => {
+          {(books ?? []).map((book) => {
             const stats = statsByBook.get(book.id) ?? {
               chapterCount: 0,
               wordCount: 0,
