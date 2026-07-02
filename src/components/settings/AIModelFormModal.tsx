@@ -234,7 +234,7 @@ export function AIModelFormModal({
             aria-checked={form.enabled}
             onClick={() => onFormChange({ ...form, enabled: !form.enabled })}
             className={cn(
-              'relative h-6 w-11 flex-shrink-0 overflow-hidden rounded-full transition-colors duration-200',
+              'relative h-6 w-11 shrink-0 overflow-hidden rounded-full transition-colors duration-200',
               form.enabled ? 'bg-primary' : 'bg-border',
             )}
           >

@@ -48,7 +48,7 @@ export function ModelCard({
       <div className="flex items-center gap-4 px-4 py-3">
         {/* 服务商色块 */}
         <div
-          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-white font-bold text-xs"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white font-bold text-xs"
           style={{ backgroundColor: PROVIDER_META[model.provider].color }}
         >
           {PROVIDER_META[model.provider].label.slice(0, 2)}

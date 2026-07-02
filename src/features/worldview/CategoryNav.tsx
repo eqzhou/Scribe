@@ -88,7 +88,7 @@ export function CategoryNav({
                 {/* 现代分类图标 */}
                 <Icon
                   className={cn(
-                    'h-4 w-4 text-primary transition-all duration-150 flex-shrink-0',
+                    'h-4 w-4 text-primary transition-all duration-150 shrink-0',
                     !isActive && 'opacity-60 group-hover:opacity-100 group-hover:scale-105',
                   )}
                   aria-hidden="true"

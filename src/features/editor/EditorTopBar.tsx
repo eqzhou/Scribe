@@ -52,7 +52,7 @@ export function EditorTopBar({
   const statusBadge = CHAPTER_STATUS_CONFIG[status];
 
   return (
-    <div className="flex flex-shrink-0 items-center gap-4 border-b border-border/60 bg-background/75 backdrop-blur-md px-6 py-3 z-10 shadow-sm">
+    <div className="flex shrink-0 items-center gap-4 border-b border-border/60 bg-background/75 backdrop-blur-md px-6 py-3 z-10 shadow-sm">
       {/* 章节标题（可编辑，带有雅致焦点边框） */}
       <input
         type="text"

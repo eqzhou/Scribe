@@ -149,7 +149,7 @@ export default function EditorPage() {
             : { width: 240, opacity: 1 }
         }
         transition={{ type: 'spring', stiffness: 220, damping: 28 }}
-        className="hidden h-full flex-shrink-0 overflow-hidden md:block"
+        className="hidden h-full shrink-0 overflow-hidden md:block"
         aria-hidden={focusMode}
       >
         <ChapterTree bookId={bookId} />
@@ -189,7 +189,7 @@ export default function EditorPage() {
             : { width: 280, opacity: 1 }
         }
         transition={{ type: 'spring', stiffness: 220, damping: 28 }}
-        className="hidden h-full flex-shrink-0 overflow-hidden lg:block"
+        className="hidden h-full shrink-0 overflow-hidden lg:block"
         aria-hidden={focusMode}
       >
         <SettingSidebar bookId={bookId} />

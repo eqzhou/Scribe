@@ -68,7 +68,7 @@ export default function Sidebar() {
   return (
     <aside
       className={cn(
-        'hidden md:flex h-screen w-[72px] flex-shrink-0 flex-col items-center',
+        'hidden md:flex h-screen w-[72px] shrink-0 flex-col items-center',
         'border-r border-border bg-card pb-4 pt-5 z-30 shadow-premium',
       )}
     >

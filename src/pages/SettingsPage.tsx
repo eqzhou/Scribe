@@ -297,7 +297,7 @@ export default function SettingsPage() {
               type="button"
               onClick={() => setActiveTab(tab.key)}
               className={cn(
-                'relative flex flex-shrink-0 items-center gap-1.5 rounded-md px-3.5 py-1.5 font-serif text-sm transition-colors',
+                'relative flex shrink-0 items-center gap-1.5 rounded-md px-3.5 py-1.5 font-serif text-sm transition-colors',
                 active
                   ? 'text-primary'
                   : 'text-muted-foreground hover:text-foreground',
@@ -563,7 +563,7 @@ export default function SettingsPage() {
                     'disabled:cursor-not-allowed disabled:opacity-60',
                   )}
                 >
-                  <Download className="h-5 w-5 flex-shrink-0 text-primary" aria-hidden="true" />
+                  <Download className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
                   <div className="flex-1">
                     <p className="font-serif text-sm font-medium text-foreground">导出当前作品</p>
                     <p className="text-[11px] text-muted-foreground">
@@ -582,7 +582,7 @@ export default function SettingsPage() {
                     'disabled:cursor-not-allowed disabled:opacity-60',
                   )}
                 >
-                  <Archive className="h-5 w-5 flex-shrink-0 text-secondary" aria-hidden="true" />
+                  <Archive className="h-5 w-5 shrink-0 text-secondary" aria-hidden="true" />
                   <div className="flex-1">
                     <p className="font-serif text-sm font-medium text-foreground">导出全部作品</p>
                     <p className="text-[11px] text-muted-foreground">
@@ -598,7 +598,7 @@ export default function SettingsPage() {
                     'disabled:cursor-not-allowed disabled:opacity-60',
                   )}
                 >
-                  <Upload className="h-5 w-5 flex-shrink-0 text-moss" aria-hidden="true" />
+                  <Upload className="h-5 w-5 shrink-0 text-moss" aria-hidden="true" />
                   <div className="flex-1">
                     <p className="font-serif text-sm font-medium text-foreground">
                       导入文件
@@ -627,7 +627,7 @@ export default function SettingsPage() {
                     'disabled:cursor-not-allowed disabled:opacity-60',
                   )}
                 >
-                  <Trash2 className="h-5 w-5 flex-shrink-0 text-primary" aria-hidden="true" />
+                  <Trash2 className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
                   <div className="flex-1">
                     <p className="font-serif text-sm font-medium text-primary">
                       清除全部本地数据

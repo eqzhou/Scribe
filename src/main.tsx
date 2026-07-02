@@ -14,10 +14,14 @@ useAIModelStore.getState().fetchModels();
 
 // 首次启动注入种子数据（《云隐录》示例武侠小说）
 // seedData 内部幂等：若数据库已有作品则跳过
-seedData().then(() => {
-  // 注入完成后刷新作品列表，并修正 currentBookId 合法性
-  useBookStore.getState().refreshBooks();
-});
+seedData()
+  .then(() => {
+    // 注入完成后刷新作品列表，并修正 currentBookId 合法性
+    useBookStore.getState().refreshBooks();
+  })
+  .catch((err) => {
+    console.error('种子数据注入失败：', err);
+  });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

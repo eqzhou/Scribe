@@ -94,35 +94,43 @@ export function ChapterTree({ bookId }: ChapterTreeProps) {
 
   /** 新建卷宗 */
   const handleNewVolume = async (): Promise<void> => {
-    const nextOrder = volumes.length === 0 ? 0 : Math.max(...volumes.map((v) => v.order)) + 1;
-    await volumeRepository.create({
-      bookId,
-      title: `第${volumes.length + 1}卷`,
-      order: nextOrder,
-    });
+    try {
+      const nextOrder = volumes.length === 0 ? 0 : Math.max(...volumes.map((v) => v.order)) + 1;
+      await volumeRepository.create({
+        bookId,
+        title: `第${volumes.length + 1}卷`,
+        order: nextOrder,
+      });
+    } catch (err) {
+      pushToast('error', `新建卷宗失败：${err instanceof Error ? err.message : String(err)}`);
+    }
   };
 
   /** 新建章节（默认归入第一个卷宗或无卷宗） */
   const handleNewChapter = async (volumeId?: string): Promise<void> => {
-    const volId = volumeId ?? volumes[0]?.id;
-    const siblingChapters = volId
-      ? chapters.filter((c) => c.volumeId === volId)
-      : chapters.filter((c) => !c.volumeId);
-    const nextOrder =
-      siblingChapters.length === 0
-        ? 0
-        : Math.max(...siblingChapters.map((c) => c.order)) + 1;
-    const chapter = await chapterRepository.create({
-      bookId,
-      volumeId: volId,
-      title: `第${chapters.length + 1}章`,
-      content: '',
-      summary: '',
-      status: 'draft',
-      wordCount: 0,
-      order: nextOrder,
-    });
-    setCurrentChapter(chapter.id);
+    try {
+      const volId = volumeId ?? volumes[0]?.id;
+      const siblingChapters = volId
+        ? chapters.filter((c) => c.volumeId === volId)
+        : chapters.filter((c) => !c.volumeId);
+      const nextOrder =
+        siblingChapters.length === 0
+          ? 0
+          : Math.max(...siblingChapters.map((c) => c.order)) + 1;
+      const chapter = await chapterRepository.create({
+        bookId,
+        volumeId: volId,
+        title: `第${chapters.length + 1}章`,
+        content: '',
+        summary: '',
+        status: 'draft',
+        wordCount: 0,
+        order: nextOrder,
+      });
+      setCurrentChapter(chapter.id);
+    } catch (err) {
+      pushToast('error', `新建章节失败：${err instanceof Error ? err.message : String(err)}`);
+    }
   };
 
   /** 拖拽结束：更新章节 order */
@@ -146,19 +154,27 @@ export function ChapterTree({ bookId }: ChapterTreeProps) {
     const reordered = [...siblings];
     const [moved] = reordered.splice(oldIndex, 1);
     reordered.splice(newIndex, 0, moved);
-    await db.transaction('rw', db.chapters, async () => {
-      for (let i = 0; i < reordered.length; i++) {
-        if (reordered[i].order !== i) {
-          await chapterRepository.update(reordered[i].id, { order: i });
+    try {
+      await db.transaction('rw', db.chapters, async () => {
+        for (let i = 0; i < reordered.length; i++) {
+          if (reordered[i].order !== i) {
+            await chapterRepository.update(reordered[i].id, { order: i });
+          }
         }
-      }
-    });
+      });
+    } catch (err) {
+      pushToast('error', `章节排序失败：${err instanceof Error ? err.message : String(err)}`);
+    }
   };
 
   /** 打开删除确认：记录章节 + 由 Hook 检测引用影响 */
   const handleDeleteClick = async (chapter: Chapter): Promise<void> => {
     setConfirmDelete(chapter);
-    await requestDelete('chapter', chapter.id, bookId);
+    try {
+      await requestDelete('chapter', chapter.id, bookId);
+    } catch (err) {
+      pushToast('error', `检测引用失败：${err instanceof Error ? err.message : String(err)}`);
+    }
   };
 
   /** 确认删除章节 */
@@ -174,23 +190,31 @@ export function ChapterTree({ bookId }: ChapterTreeProps) {
         : idx < chapters.length - 1
           ? chapters[idx + 1]
           : null;
-    await chapterRepository.delete(targetId);
-    if (neighbor) {
-      setCurrentChapter(neighbor.id);
-    } else {
-      setCurrentChapter(null);
+    try {
+      await chapterRepository.delete(targetId);
+      if (neighbor) {
+        setCurrentChapter(neighbor.id);
+      } else {
+        setCurrentChapter(null);
+      }
+      pushToast('success', `已删除章节「${targetTitle}」`);
+    } catch (err) {
+      pushToast('error', `删除章节失败：${err instanceof Error ? err.message : String(err)}`);
     }
-    pushToast('success', `已删除章节「${targetTitle}」`);
   };
 
   /** 切换章节状态 */
   const handleStatusChange = async (chapter: Chapter, newStatus: ChapterStatus): Promise<void> => {
     if (chapter.status === newStatus) return;
-    await chapterRepository.update(chapter.id, { status: newStatus });
-    pushToast(
-      'success',
-      `章节「${chapter.title}」已切换为「${CHAPTER_STATUS_CONFIG[newStatus].label}」`,
-    );
+    try {
+      await chapterRepository.update(chapter.id, { status: newStatus });
+      pushToast(
+        'success',
+        `章节「${chapter.title}」已切换为「${CHAPTER_STATUS_CONFIG[newStatus].label}」`,
+      );
+    } catch (err) {
+      pushToast('error', `状态切换失败：${err instanceof Error ? err.message : String(err)}`);
+    }
   };
 
   // 按卷宗分组（无卷宗的章节归入"未分卷"组）

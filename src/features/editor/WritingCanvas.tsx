@@ -120,7 +120,13 @@ export function WritingCanvas({ chapter, bookId }: WritingCanvasProps) {
       if (current.status === 'done' && !notifiedDoneRef.current) {
         notifiedDoneRef.current = true;
         setNotifiedDone(true);
-        void chapterRepository.update(current.id, { status: 'writing' });
+        void chapterRepository
+          .update(current.id, { status: 'writing' })
+          .catch((err) => {
+            useToastStore
+              .getState()
+              .pushToast('error', `状态回退失败：${err instanceof Error ? err.message : String(err)}`);
+          });
         useToastStore
           .getState()
           .pushToast('warning', '已完成章节被修改，状态已回退为「写作中」');
@@ -215,33 +221,49 @@ export function WritingCanvas({ chapter, bookId }: WritingCanvasProps) {
   // 标题更新（失焦保存）
   const handleTitleBlur = async (): Promise<void> => {
     const trimmed = title.trim();
-    if (trimmed && trimmed !== chapter.title) {
-      await chapterRepository.update(chapter.id, { title: trimmed });
-    } else if (!trimmed) {
-      setTitle(chapter.title);
+    try {
+      if (trimmed && trimmed !== chapter.title) {
+        await chapterRepository.update(chapter.id, { title: trimmed });
+      } else if (!trimmed) {
+        setTitle(chapter.title);
+      }
+    } catch (err) {
+      pushToast('error', `标题保存失败：${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
   // 标记完成（二次确认）
   const [confirmDone, setConfirmDone] = useState(false);
   const handleMarkDone = async (): Promise<void> => {
-    await chapterRepository.update(chapter.id, { status: 'done' });
-    setConfirmDone(false);
-    pushToast('success', `章节「${chapter.title}」已标记为完成`);
+    try {
+      await chapterRepository.update(chapter.id, { status: 'done' });
+      setConfirmDone(false);
+      pushToast('success', `章节「${chapter.title}」已标记为完成`);
+    } catch (err) {
+      pushToast('error', `标记完成失败：${err instanceof Error ? err.message : String(err)}`);
+    }
   };
 
   // 归档（done→archived，二次确认）
   const handleArchive = async (): Promise<void> => {
-    await chapterRepository.update(chapter.id, { status: 'archived' });
-    notifiedDoneRef.current = false;
-    pushToast('success', `章节「${chapter.title}」已归档`);
+    try {
+      await chapterRepository.update(chapter.id, { status: 'archived' });
+      notifiedDoneRef.current = false;
+      pushToast('success', `章节「${chapter.title}」已归档`);
+    } catch (err) {
+      pushToast('error', `归档失败：${err instanceof Error ? err.message : String(err)}`);
+    }
   };
 
   // 恢复写作（archived→writing，二次确认）
   const handleRestore = async (): Promise<void> => {
-    await chapterRepository.update(chapter.id, { status: 'writing' });
-    notifiedDoneRef.current = false;
-    pushToast('success', `章节「${chapter.title}」已恢复为「写作中」`);
+    try {
+      await chapterRepository.update(chapter.id, { status: 'writing' });
+      notifiedDoneRef.current = false;
+      pushToast('success', `章节「${chapter.title}」已恢复为「写作中」`);
+    } catch (err) {
+      pushToast('error', `恢复写作失败：${err instanceof Error ? err.message : String(err)}`);
+    }
   };
 
   // 导出当前章节为 JSON 备份（保存失败兜底）

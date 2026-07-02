@@ -85,7 +85,7 @@ export function RecentList({ bookId }: RecentListProps) {
         >
           {/* 左侧色彩条：章节统一为墨黑 */}
           <span
-            className="h-8 w-1 flex-shrink-0 rounded-sm bg-foreground"
+            className="h-8 w-1 shrink-0 rounded-sm bg-foreground"
             aria-hidden="true"
           />
           {/* 标题 + 副信息 */}
@@ -98,7 +98,7 @@ export function RecentList({ bookId }: RecentListProps) {
             </small>
           </div>
           {/* 相对时间 */}
-          <span className="flex-shrink-0 font-mono text-[12px] opacity-70 text-muted-foreground">
+          <span className="shrink-0 font-mono text-[12px] opacity-70 text-muted-foreground">
             {getRelativeTime(item.updatedAt)}
           </span>
         </button>

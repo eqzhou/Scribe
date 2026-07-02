@@ -83,7 +83,7 @@ export function GoalRing({ bookId }: GoalRingProps) {
   return (
     <div className="flex items-center gap-5">
       {/* SVG 环 */}
-      <div className="relative h-[120px] w-[120px] flex-shrink-0">
+      <div className="relative h-[120px] w-[120px] shrink-0">
         <svg width={RING_SIZE} height={RING_SIZE} style={{ transform: 'rotate(-90deg)' }}>
           <defs>
             <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">

@@ -296,7 +296,7 @@ export default function GlobalSearch() {
           >
             {/* 搜索输入框 */}
             <div className="flex items-center gap-3.5 border-b border-border/60 px-5 py-4">
-              <Search className="h-4 w-4 flex-shrink-0 text-primary" aria-hidden="true" />
+              <Search className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
               <input
                 ref={inputRef}
                 type="text"
@@ -359,7 +359,7 @@ export default function GlobalSearch() {
                             )}
                           </div>
                           <CornerDownLeft
-                            className="h-3 w-3 flex-shrink-0 text-muted-foreground group-hover/item:text-primary transition-colors"
+                            className="h-3 w-3 shrink-0 text-muted-foreground group-hover/item:text-primary transition-colors"
                             aria-hidden="true"
                           />
                         </button>

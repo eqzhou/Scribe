@@ -528,13 +528,17 @@ export function CharacterForm({
         onClose={() => setNameChangeInfo(null)}
         onSync={async () => {
           if (!nameChangeInfo) return;
-          await applyNameSync(
-            nameChangeInfo.charId,
-            nameChangeInfo.oldName,
-            nameChangeInfo.newName,
-            bookId,
-          );
-          setNameChangeInfo(null);
+          try {
+            await applyNameSync(
+              nameChangeInfo.charId,
+              nameChangeInfo.oldName,
+              nameChangeInfo.newName,
+              bookId,
+            );
+            setNameChangeInfo(null);
+          } catch (err) {
+            pushToast('error', `姓名同步失败：${err instanceof Error ? err.message : String(err)}`);
+          }
         }}
       />
     </>

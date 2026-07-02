@@ -32,7 +32,7 @@ export function OutlinePanel({
           animate={{ width: 280, opacity: 1 }}
           exit={{ width: 0, opacity: 0 }}
           transition={{ duration: 0.25, ease: 'easeInOut' }}
-          className="flex-shrink-0 overflow-hidden border-l border-border bg-muted/50"
+          className="shrink-0 overflow-hidden border-l border-border bg-muted/50"
         >
           <div className="flex h-full w-[280px] flex-col">
             {/* 大纲头部 */}

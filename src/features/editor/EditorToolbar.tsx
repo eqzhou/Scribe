@@ -50,7 +50,7 @@ export function EditorToolbar({
   onAICancel,
 }: EditorToolbarProps) {
   return (
-    <div className="flex flex-shrink-0 items-center gap-1.5 border-b border-border/50 bg-muted/25 backdrop-blur px-6 py-2 z-10 shadow-sm">
+    <div className="flex shrink-0 items-center gap-1.5 border-b border-border/50 bg-muted/25 backdrop-blur px-6 py-2 z-10 shadow-sm">
       <ToolbarButton onClick={onToggleBold} title="加粗 (Ctrl+B)" icon={Bold} />
       <ToolbarButton onClick={onToggleItalic} title="斜体 (Ctrl+I)" icon={Italic} />
       <ToolbarButton onClick={onToggleBlockquote} title="引文块 (Ctrl+Shift+K)" icon={Quote} />

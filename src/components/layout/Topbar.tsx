@@ -103,14 +103,14 @@ export default function Topbar() {
   return (
     <header
       className={cn(
-        'z-20 flex h-16 flex-shrink-0 items-center gap-5 border-b border-border/50 px-8',
+        'z-20 flex h-16 shrink-0 items-center gap-5 border-b border-border/50 px-8',
         'bg-background/75 backdrop-blur-xl shadow-premium transition-all duration-200',
       )}
     >
       {/* 品牌图标：点击回到首页 */}
       <a
         href="/"
-        className="group flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-secondary/40 bg-secondary/10 font-brush text-lg text-primary transition-all duration-200 hover:border-primary hover:bg-primary/15 hover:shadow-soft"
+        className="group flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-secondary/40 bg-secondary/10 font-brush text-lg text-primary transition-all duration-200 hover:border-primary hover:bg-primary/15 hover:shadow-soft"
         title="返回首页"
         aria-label="返回首页"
       >
@@ -220,7 +220,7 @@ export default function Topbar() {
                       )}
                     >
                       <span
-                        className="h-7 w-5 flex-shrink-0 rounded-[2px]"
+                        className="h-7 w-5 shrink-0 rounded-[2px]"
                         style={{
                           background: `linear-gradient(135deg, ${book.coverColor}, #111e11)`,
                           boxShadow: '0 1px 2px rgba(0,0,0,0.15)',

@@ -31,12 +31,12 @@ export interface StatCardProps {
   extra?: ReactNode;
 }
 
-/** 图标变体样式映射：背景色 + 文字色 */
+/** 图标变体样式映射：背景色 + 文字色（统一深底浅字，保证浅色/深色模式下对比度） */
 const iconVariantStyles: Record<StatIconVariant, string> = {
   foreground: 'bg-foreground text-muted',
   primary: 'bg-primary text-primary-foreground',
   moss: 'bg-moss text-muted',
-  secondary: 'bg-secondary text-secondary-foreground',
+  secondary: 'bg-secondary-foreground text-secondary',
 };
 
 /**
