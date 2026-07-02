@@ -149,6 +149,8 @@ export function useAIEditorActions({
       // 使用 setTimeout 等待 ghost text 内容稳定，再用编辑器纯文本做提取
       setTimeout(async () => {
         try {
+          // 检查 editor 是否仍可用（用户可能在 1.5s 内切换章节或卸载组件）
+          if (!editor || editor.isDestroyed) return;
           const content = editor.getText();
           if (!content || content.length < 50) return;
           await executeCharacterExtract(

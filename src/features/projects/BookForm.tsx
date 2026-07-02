@@ -173,9 +173,10 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
 
     setGeneratingWorld(true);
     setError(null);
+    let saved: Book | null = null;
     try {
       // 1. 先创建作品
-      const saved = await bookRepository.create({
+      saved = await bookRepository.create({
         title: form.title.trim(),
         subtitle: form.subtitle.trim(),
         synopsis: form.synopsis.trim(),
@@ -195,6 +196,10 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
       onSaved(saved);
       onClose();
     } catch (err) {
+      // AI 生成失败时回滚：删除刚创建的空作品，避免重复创建
+      if (saved) {
+        await bookRepository.delete(saved.id).catch(() => {});
+      }
       setError(err instanceof Error ? err.message : '生成失败');
     } finally {
       setGeneratingWorld(false);

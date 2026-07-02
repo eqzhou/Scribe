@@ -38,13 +38,18 @@ const VALID_WV_CATEGORIES: ReadonlySet<string> = new Set([
   'item',
 ]);
 
-/** 合法的角色类型白名单 */
-const VALID_ROLES: ReadonlySet<string> = new Set([
+/** 合法的角色类型白名单（导出供 UI 层校验复用） */
+export const VALID_ROLES: ReadonlySet<string> = new Set([
   'protagonist',
   'supporting',
   'antagonist',
   'minor',
 ]);
+
+/** 判断角色类型是否合法 */
+export function isValidRole(role: string): boolean {
+  return VALID_ROLES.has(role);
+}
 
 /** 从作品 ID 构建 AI 上下文（角色 + 世界观摘要） */
 export async function buildAIContext(
@@ -377,7 +382,7 @@ export async function executeWorldview(
  * 执行批量世界观构建任务，并把结果直接写入 db.worldview 表。
  *
  * 用于作品创建时一键生成 6 大分类的初始世界观。
- * 返回入库后的 WorldviewEntry 数组。
+ * 返回入库条目数。
  */
 export async function executeWorldviewBatch(
   bookId: string,

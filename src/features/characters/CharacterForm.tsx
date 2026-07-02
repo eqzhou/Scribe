@@ -20,7 +20,7 @@ import {
   relationRepository,
   worldviewRepository,
 } from '../../lib/repositories';
-import { executeCharacterGenerate } from '../../lib/aiTools';
+import { executeCharacterGenerate, isValidRole } from '../../lib/aiTools';
 import { useToastStore, useBookStore } from '../../stores';
 import { syncCharacterWorldviewRelations } from '../../lib/relationSync';
 import { useDeleteWithImpact } from '../../hooks/useDeleteWithImpact';
@@ -257,9 +257,7 @@ export function CharacterForm({
           name: prev.name || result.name || '',
           alias: result.alias || prev.alias,
           faction: result.faction || prev.faction,
-          role: (['protagonist', 'supporting', 'antagonist', 'minor'].includes(result.role)
-            ? result.role
-            : prev.role) as CharacterFormState['role'],
+          role: (isValidRole(result.role) ? result.role : prev.role) as CharacterFormState['role'],
           appearance: result.appearance || prev.appearance,
           personality: result.personality || prev.personality,
           background: result.background || prev.background,
