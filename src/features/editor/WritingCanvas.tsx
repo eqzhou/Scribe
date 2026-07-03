@@ -73,6 +73,8 @@ export function WritingCanvas({ chapter, bookId }: WritingCanvasProps) {
   const [outlineSaving, setOutlineSaving] = useState(false);
   const [outlineSaved, setOutlineSaved] = useState(false);
   const outlineTimerRef = useRef<number | null>(null);
+  // 「已保存」徽章淡出 timer，独立跟踪以便卸载时清理
+  const outlineSavedTimerRef = useRef<number | null>(null);
 
   // 用于 onUpdate 闭包内读取最新 chapter 状态，避免 stale closure
   const chapterRef = useRef(chapter);
@@ -174,7 +176,10 @@ export function WritingCanvas({ chapter, bookId }: WritingCanvasProps) {
         await chapterRepository.update(chapter.id, { outline: outlineText });
         setOutlineSaving(false);
         setOutlineSaved(true);
-        window.setTimeout(() => setOutlineSaved(false), 1500);
+        if (outlineSavedTimerRef.current !== null) {
+          window.clearTimeout(outlineSavedTimerRef.current);
+        }
+        outlineSavedTimerRef.current = window.setTimeout(() => setOutlineSaved(false), 1500);
       } catch {
         setOutlineSaving(false);
         useToastStore.getState().pushToast('error', '大纲保存失败');
@@ -184,6 +189,9 @@ export function WritingCanvas({ chapter, bookId }: WritingCanvasProps) {
     return () => {
       if (outlineTimerRef.current !== null) {
         window.clearTimeout(outlineTimerRef.current);
+      }
+      if (outlineSavedTimerRef.current !== null) {
+        window.clearTimeout(outlineSavedTimerRef.current);
       }
     };
   }, [outlineText, chapter.id, chapter.outline]);

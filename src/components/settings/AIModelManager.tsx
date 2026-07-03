@@ -10,7 +10,7 @@
  *
  * 卡片与表单弹窗已拆分至 ModelCard / AIModelFormModal；常量与表单默认值见 ./constants。
  */
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, ChevronDown, Sparkles, AlertCircle, Loader2, Star } from 'lucide-react';
 import { useAIModelStore, PROVIDER_META } from '../../stores/aiModelStore';
@@ -41,6 +41,16 @@ export function AIModelManager() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const pushToast = useToastStore.getState().pushToast;
+
+  // 资源清理：保存测试用的 timer 与 AbortController，组件卸载时一并清理
+  const testTimerRef = useRef<number | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  useEffect(() => {
+    return () => {
+      if (testTimerRef.current !== null) window.clearTimeout(testTimerRef.current);
+      abortRef.current?.abort();
+    };
+  }, []);
 
   const enabledModels = getEnabledModels();
   const active = getActiveModel();
@@ -97,7 +107,8 @@ export function AIModelManager() {
     const result = await testModel(id);
     setTestResult(result);
     setTestingId(null);
-    setTimeout(() => setTestResult(null), 4000);
+    if (testTimerRef.current !== null) window.clearTimeout(testTimerRef.current);
+    testTimerRef.current = window.setTimeout(() => setTestResult(null), 4000);
   };
 
   /** 切换启用状态 */
@@ -134,7 +145,10 @@ export function AIModelManager() {
     if (testingId === '__modal__') return;
     setTestingId('__modal__');
     setTestResult(null);
+    // 复用组件级 AbortController，组件卸载时会自动 abort
+    abortRef.current?.abort();
     const controller = new AbortController();
+    abortRef.current = controller;
     const timeoutId = window.setTimeout(() => controller.abort(), 20000);
     try {
       const res = await fetch('/api/ai/test', {
@@ -161,7 +175,8 @@ export function AIModelManager() {
       window.clearTimeout(timeoutId);
     }
     setTestingId(null);
-    setTimeout(() => setTestResult(null), 4000);
+    if (testTimerRef.current !== null) window.clearTimeout(testTimerRef.current);
+    testTimerRef.current = window.setTimeout(() => setTestResult(null), 4000);
   };
 
   const sortedModels = [...models].sort((a, b) => {

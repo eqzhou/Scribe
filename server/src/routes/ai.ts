@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { streamChat, chat } from '../services/aiService.js';
+import { streamChat, chat, validateBaseUrl } from '../services/aiService.js';
 import type { ModelConfig } from '../services/aiService.js';
 import { getActiveModel } from '../services/modelStore.js';
 import {
@@ -202,6 +202,12 @@ router.post('/test', async (req: Request, res: Response) => {
     const { modelConfig } = req.body as { modelConfig?: Partial<ModelConfig> };
     if (!modelConfig?.model || !modelConfig?.baseUrl) {
       res.status(400).json({ ok: false, message: '缺少 model / baseUrl' });
+      return;
+    }
+    // SSRF 防护：校验 baseUrl 协议与目标地址
+    const urlCheck = validateBaseUrl(modelConfig.baseUrl);
+    if (!urlCheck.ok) {
+      res.status(400).json({ ok: false, message: `baseUrl 校验失败：${urlCheck.message}` });
       return;
     }
     const controller = new AbortController();

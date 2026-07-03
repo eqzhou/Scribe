@@ -6,6 +6,60 @@ interface ChatOptions {
   maxTokens?: number;
 }
 
+/**
+ * 校验 baseUrl 安全性，防止 SSRF 攻击。
+ *
+ * 规则：
+ * 1. 必须是 http/https 协议
+ * 2. hostname 不能是 localhost 或私有/保留 IP 段
+ *    - 127.0.0.0/8 (loopback)
+ *    - 10.0.0.0/8 (RFC1918)
+ *    - 172.16.0.0/12 (RFC1918)
+ *    - 192.168.0.0/16 (RFC1918)
+ *    - 169.254.0.0/16 (link-local，含云厂商元数据服务)
+ *    - 0.0.0.0/8
+ *    - ::1 / fc00::/7 / fe80::/10 (IPv6 对应段)
+ *
+ * 注意：不阻止域名解析到内网 IP 的攻击（DNS rebinding），
+ * 但已覆盖最常见的 SSRF 向量。
+ */
+export function validateBaseUrl(baseUrl: string): { ok: boolean; message: string } {
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    return { ok: false, message: 'baseUrl 不是合法的 URL' };
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return { ok: false, message: `baseUrl 协议非法：${url.protocol}（仅允许 http/https）` };
+  }
+  const host = url.hostname.toLowerCase();
+  // 拒绝 localhost
+  if (host === 'localhost' || host === '::1') {
+    return { ok: false, message: '禁止访问 localhost' };
+  }
+  // IPv4 私有/保留段检查
+  const ipv4Match = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4Match) {
+    const [a, b] = ipv4Match.slice(1).map(Number);
+    if (
+      a === 0 ||                              // 0.0.0.0/8
+      a === 10 ||                             // 10.0.0.0/8
+      a === 127 ||                            // 127.0.0.0/8
+      (a === 172 && b >= 16 && b <= 31) ||    // 172.16.0.0/12
+      (a === 192 && b === 168) ||             // 192.168.0.0/16
+      (a === 169 && b === 254)                // 169.254.0.0/16（含云元数据服务）
+    ) {
+      return { ok: false, message: `禁止访问私有/保留 IP：${host}` };
+    }
+  }
+  // IPv6 私有段
+  if (host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80')) {
+    return { ok: false, message: `禁止访问私有 IPv6 段：${host}` };
+  }
+  return { ok: true, message: '' };
+}
+
 // 动态模型配置（由请求传入）
 export interface ModelConfig {
   model: string;
@@ -49,6 +103,11 @@ function resolveConfig(
   const model = modelConfig?.model ?? '';
   if (!model || !baseUrl) {
     throw new Error('未配置激活的 AI 模型，请先在设置中添加并激活模型');
+  }
+  // SSRF 防护：校验 baseUrl 协议与目标地址
+  const urlCheck = validateBaseUrl(baseUrl);
+  if (!urlCheck.ok) {
+    throw new Error(`baseUrl 校验失败：${urlCheck.message}`);
   }
   const temperature = options.temperature ?? modelConfig?.temperature;
   const maxTokens = options.maxTokens ?? modelConfig?.maxTokens;

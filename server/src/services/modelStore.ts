@@ -8,6 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { validateBaseUrl } from './aiService.js';
 import { randomUUID } from 'node:crypto';
 
 export interface ServerAIModel {
@@ -112,6 +113,11 @@ export function getModel(id: string, includeKey = false): ServerAIModel | null {
 }
 
 export function createModel(input: Omit<ServerAIModel, 'id' | 'createdAt' | 'updatedAt'>): ServerAIModel {
+  // SSRF 防护：写入前校验 baseUrl
+  const urlCheck = validateBaseUrl(input.baseUrl);
+  if (!urlCheck.ok) {
+    throw new Error(`baseUrl 校验失败：${urlCheck.message}`);
+  }
   const data = load();
   const now = Date.now();
   const model: ServerAIModel = {
@@ -136,6 +142,13 @@ export function createModel(input: Omit<ServerAIModel, 'id' | 'createdAt' | 'upd
 }
 
 export function updateModel(id: string, patch: Partial<ServerAIModel>): ServerAIModel | null {
+  // SSRF 防护：若更新了 baseUrl 则校验
+  if (patch.baseUrl !== undefined) {
+    const urlCheck = validateBaseUrl(patch.baseUrl);
+    if (!urlCheck.ok) {
+      throw new Error(`baseUrl 校验失败：${urlCheck.message}`);
+    }
+  }
   const data = load();
   const idx = data.models.findIndex((m) => m.id === id);
   if (idx < 0) return null;
@@ -185,11 +198,14 @@ export function setActiveModel(id: string): boolean {
   return true;
 }
 
-/** 测试连通性 — 直接复用 aiService.ts 里的逻辑，但此处独立实现避免循环依赖 */
+/** 测试连通性 — 直接复用 aiService.ts 里的逻辑 */
 export async function testModel(id: string): Promise<{ ok: boolean; message: string }> {
   const m = getModel(id, true);
   if (!m) return { ok: false, message: '模型不存在' };
   if (!m.modelId || !m.baseUrl) return { ok: false, message: '缺少模型 ID 或 API 地址' };
+  // SSRF 防护：校验 baseUrl
+  const urlCheck = validateBaseUrl(m.baseUrl);
+  if (!urlCheck.ok) return { ok: false, message: `baseUrl 校验失败：${urlCheck.message}` };
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
   try {

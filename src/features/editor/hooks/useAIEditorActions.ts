@@ -10,7 +10,7 @@
  * 同时托管风格选择弹窗、全文生成弹窗的开关状态与全文大纲文本，
  * 供主组件在 JSX 中渲染对应 Modal。
  */
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { Editor } from '@tiptap/react';
 import { db } from '../../../lib/db';
 import {
@@ -86,6 +86,14 @@ export function useAIEditorActions({
   const [fulltextModalOpen, setFulltextModalOpen] = useState(false);
   const [fulltextOutline, setFulltextOutline] = useState('');
 
+  // 延迟角色提取的 timer，组件卸载时清理避免 state-on-unmounted
+  const extractTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    return () => {
+      if (extractTimerRef.current !== null) window.clearTimeout(extractTimerRef.current);
+    };
+  }, []);
+
   /** AI 续写：在光标处续写下文 */
   const handleAIContinue = async (): Promise<void> => {
     if (!editor || aiBusy) return;
@@ -147,7 +155,8 @@ export function useAIEditorActions({
 
       // 全文生成完成后，异步触发角色提取（不阻塞主流程，失败静默处理）
       // 使用 setTimeout 等待 ghost text 内容稳定，再用编辑器纯文本做提取
-      setTimeout(async () => {
+      if (extractTimerRef.current !== null) window.clearTimeout(extractTimerRef.current);
+      extractTimerRef.current = window.setTimeout(async () => {
         try {
           // 检查 editor 是否仍可用（用户可能在 1.5s 内切换章节或卸载组件）
           if (!editor || editor.isDestroyed) return;

@@ -170,11 +170,7 @@ export function ChapterTree({ bookId }: ChapterTreeProps) {
   /** 打开删除确认：记录章节 + 由 Hook 检测引用影响 */
   const handleDeleteClick = async (chapter: Chapter): Promise<void> => {
     setConfirmDelete(chapter);
-    try {
-      await requestDelete('chapter', chapter.id, bookId);
-    } catch (err) {
-      pushToast('error', `检测引用失败：${err instanceof Error ? err.message : String(err)}`);
-    }
+    await requestDelete('chapter', chapter.id, bookId);
   };
 
   /** 确认删除章节 */

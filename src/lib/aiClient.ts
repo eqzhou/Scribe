@@ -70,42 +70,47 @@ async function streamRequest(
     let buffer = '';
     let full = '';
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
 
-      // 按 SSE 协议：事件以 \n\n 分隔，每行 data: xxx
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? ''; // 最后一行可能不完整，保留
+        // 按 SSE 协议：事件以 \n\n 分隔，每行 data: xxx
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? ''; // 最后一行可能不完整，保留
 
-      for (const border of lines) {
-        const trimmed = border.trim();
-        if (!trimmed || !trimmed.startsWith('data:')) continue;
-        const data = trimmed.slice(5).trim();
-        if (data === '[DONE]') {
-          onDone(full);
-          return;
-        }
-        try {
-          const parsed = JSON.parse(data) as { text?: string; error?: string };
-          if (parsed.error) {
-            throw new Error(parsed.error);
+        for (const border of lines) {
+          const trimmed = border.trim();
+          if (!trimmed || !trimmed.startsWith('data:')) continue;
+          const data = trimmed.slice(5).trim();
+          if (data === '[DONE]') {
+            onDone(full);
+            return;
           }
-          if (parsed.text) {
-            full += parsed.text;
-            onChunk(parsed.text);
+          try {
+            const parsed = JSON.parse(data) as { text?: string; error?: string };
+            if (parsed.error) {
+              throw new Error(parsed.error);
+            }
+            if (parsed.text) {
+              full += parsed.text;
+              onChunk(parsed.text);
+            }
+          } catch (e) {
+            // 非 JSON 的 data 行，跳过（可能是注释或心跳）
+            if (e instanceof SyntaxError) continue;
+            throw e;
           }
-        } catch (e) {
-          // 非 JSON 的 data 行，跳过（可能是注释或心跳）
-          if (e instanceof SyntaxError) continue;
-          throw e;
         }
       }
-    }
 
-    // 流自然结束（未收到 [DONE]）
-    onDone(full);
+      // 流自然结束（未收到 [DONE]）
+      onDone(full);
+    } finally {
+      // 确保异常或提前 return 时释放 reader 锁，避免 response.body 泄漏
+      reader.releaseLock();
+    }
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') return;
     onError(err instanceof Error ? err : new Error(String(err)));

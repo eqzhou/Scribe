@@ -10,6 +10,7 @@
  */
 import { useState } from 'react';
 import { checkReferences } from '../lib/referenceChecker';
+import { useToastStore } from '../stores';
 import type { ImpactInfo } from '../components/ui/ConfirmDialog';
 
 interface UseDeleteWithImpactResult {
@@ -45,6 +46,13 @@ export function useDeleteWithImpact(): UseDeleteWithImpactResult {
     try {
       const impact = await checkReferences(entityType, entityId, bookId);
       setDeleteImpact(impact);
+    } catch (err) {
+      // 引用检测失败时关闭弹窗并通过 toast 提示，避免 unhandled rejection
+      setConfirmOpen(false);
+      useToastStore.getState().pushToast(
+        'error',
+        `检测引用失败：${err instanceof Error ? err.message : String(err)}`,
+      );
     } finally {
       setChecking(false);
     }
