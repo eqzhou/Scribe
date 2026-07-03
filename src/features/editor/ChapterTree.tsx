@@ -13,7 +13,6 @@
  * ./ChapterTree/SortableChapterItem。状态颜色/标签统一来自 ./constants。
  */
 import { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import {
   DndContext,
   closestCenter,
@@ -29,8 +28,8 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { Plus, ChevronRight, BookPlus, FilePlus } from 'lucide-react';
-import { db } from '../../lib/db';
 import { chapterRepository, volumeRepository } from '../../lib/repositories';
+import { useApiQuery } from '../../hooks/useApiQuery';
 import type { Chapter, ChapterStatus, Volume } from '../../types';
 import { useEditorStore, useToastStore } from '../../stores';
 import { useDeleteWithImpact } from '../../hooks/useDeleteWithImpact';
@@ -51,24 +50,16 @@ export function ChapterTree({ bookId }: ChapterTreeProps) {
   const setCurrentChapter = useEditorStore((s) => s.setCurrentChapter);
 
   // 实时监听卷宗（按 order 升序）
-  const volumes = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as Volume[];
-      return db.volumes.where('bookId').equals(bookId).sortBy('order');
-    },
+  const volumes = useApiQuery<Volume[]>(
+    async () => (bookId ? volumeRepository.list(bookId) : []),
     [bookId],
-    [] as Volume[],
-  );
+  ) ?? [];
 
   // 实时监听章节（按 order 升序）
-  const chapters = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as Chapter[];
-      return db.chapters.where('bookId').equals(bookId).sortBy('order');
-    },
+  const chapters = useApiQuery<Chapter[]>(
+    async () => (bookId ? chapterRepository.list(bookId) : []),
     [bookId],
-    [] as Chapter[],
-  );
+  ) ?? [];
 
   const [collapsedVolumes, setCollapsedVolumes] = useState<Set<string>>(new Set());
 
@@ -155,13 +146,12 @@ export function ChapterTree({ bookId }: ChapterTreeProps) {
     const [moved] = reordered.splice(oldIndex, 1);
     reordered.splice(newIndex, 0, moved);
     try {
-      await db.transaction('rw', db.chapters, async () => {
-        for (let i = 0; i < reordered.length; i++) {
-          if (reordered[i].order !== i) {
-            await chapterRepository.update(reordered[i].id, { order: i });
-          }
+      // 后端无事务支持，按顺序循环 update；部分失败时由后端返回错误，前端给出提示
+      for (let i = 0; i < reordered.length; i++) {
+        if (reordered[i].order !== i) {
+          await chapterRepository.update(reordered[i].id, { order: i });
         }
-      });
+      }
     } catch (err) {
       pushToast('error', `章节排序失败：${err instanceof Error ? err.message : String(err)}`);
     }

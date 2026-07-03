@@ -298,3 +298,22 @@ export interface ProviderMeta {
   color: string;                // 品牌色（用于 UI 点缀）
   officialModels: string[];     // 常用模型 ID 建议
 }
+
+/* ========================================================================== */
+/* 十、用户账号与认证                                                           */
+/* ========================================================================== */
+
+/** 用户账号 */
+export interface User {
+  id: string;
+  username: string;
+  displayName: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+/** 认证响应 */
+export interface AuthResponse {
+  token: string;
+  user: User;
+}

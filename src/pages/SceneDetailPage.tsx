@@ -15,9 +15,14 @@
  */
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowLeft, Pencil, Users, Globe, BookOpen } from 'lucide-react';
-import { db } from '../lib/db';
+import {
+  sceneRepository,
+  characterRepository,
+  worldviewRepository,
+  chapterRepository,
+} from '../lib/repositories';
+import { useApiQuery } from '../hooks/useApiQuery';
 import { useBook } from '../hooks';
 import type { Scene, Character, WorldviewEntry, Chapter } from '../types';
 import { cn } from '../utils/cn';
@@ -74,42 +79,35 @@ export default function SceneDetailPage() {
   const book = useBook();
   const bookId = book?.id ?? null;
 
-  const scene = useLiveQuery(
+  // 实时监听目标场景；未传入 ID 或不属于当前作品时返回 null
+  // useApiQuery 在加载未完成时返回 undefined，故用 sceneState 区分加载与未找到
+  const sceneState = useApiQuery<Scene | null>(
     async () => {
       if (!sceneId || !bookId) return null;
-      const s = await db.scenes.get(sceneId);
+      const s = await sceneRepository.get(sceneId);
       if (s && s.bookId === bookId) return s;
       return null;
     },
     [sceneId, bookId],
   );
+  const scene = sceneState;
+  const loading = sceneState === undefined;
+  const notFound = !loading && scene === null;
 
-  const characters = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as Character[];
-      return db.characters.where('bookId').equals(bookId).toArray();
-    },
+  const characters = useApiQuery<Character[]>(
+    async () => (bookId ? characterRepository.list(bookId) : []),
     [bookId],
-    [] as Character[],
-  );
+  ) ?? [];
 
-  const worldviewEntries = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as WorldviewEntry[];
-      return db.worldview.where('bookId').equals(bookId).toArray();
-    },
+  const worldviewEntries = useApiQuery<WorldviewEntry[]>(
+    async () => (bookId ? worldviewRepository.list(bookId) : []),
     [bookId],
-    [] as WorldviewEntry[],
-  );
+  ) ?? [];
 
-  const chapters = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as Chapter[];
-      return db.chapters.where('bookId').equals(bookId).sortBy('order');
-    },
+  const chapters = useApiQuery<Chapter[]>(
+    async () => (bookId ? chapterRepository.list(bookId) : []),
     [bookId],
-    [] as Chapter[],
-  );
+  ) ?? [];
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Scene | null>(null);
@@ -129,12 +127,9 @@ export default function SceneDetailPage() {
     navigate('/scenes');
   };
 
-  const loading = scene === undefined;
-  const notFound = !loading && scene === null;
-
-  const relatedCharacters = characters?.filter((c) => scene?.characterIds.includes(c.id)) ?? [];
-  const relatedWorldview = worldviewEntries?.filter((w) => scene?.worldviewEntryIds.includes(w.id)) ?? [];
-  const relatedChapters = chapters?.filter((ch) => scene?.chapterIds.includes(ch.id)) ?? [];
+  const relatedCharacters = characters.filter((c) => scene?.characterIds.includes(c.id));
+  const relatedWorldview = worldviewEntries.filter((w) => scene?.worldviewEntryIds.includes(w.id));
+  const relatedChapters = chapters.filter((ch) => scene?.chapterIds.includes(ch.id));
 
   if (notFound) {
     return (

@@ -3,14 +3,18 @@
  *
  * 顶部欢迎区：大标题「剧情 · 线索经纬」+ 副文案。
  * 三 Tab 切换：剧情线 / 时间线 / 伏笔追踪，激活项 border-b-2 primary。
- * 数据：useBook 获取当前作品；useLiveQuery 监听 plotLines / plotPoints /
+ * 数据：useBook 获取当前作品；useApiQuery 轮询 plotLines / plotPoints /
  * foreshadowing / chapters，分别交由子视图渲染。
  */
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../lib/db';
-import { plotPointRepository } from '../lib/repositories';
+import {
+  plotLineRepository,
+  plotPointRepository,
+  foreshadowingRepository,
+  chapterRepository,
+} from '../lib/repositories';
+import { useApiQuery } from '../hooks/useApiQuery';
 import { useBook } from '../hooks';
 import { useToastStore } from '../stores';
 import type {
@@ -61,51 +65,35 @@ export default function PlotPage() {
   const bookId = book?.id ?? null;
 
   // 实时监听当前作品的剧情线（按 order 升序）
-  const plotLines = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as PlotLine[];
-      return db.plotLines.where('bookId').equals(bookId).sortBy('order');
-    },
+  const plotLines = useApiQuery<PlotLine[]>(
+    async () => (bookId ? plotLineRepository.list(bookId) : []),
     [bookId],
-    [] as PlotLine[],
-  );
+  ) ?? [];
 
   // 实时监听当前作品的剧情节点（用于时间线视图）
-  const plotPoints = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as PlotPoint[];
-      return db.plotPoints.where('bookId').equals(bookId).toArray();
-    },
+  const plotPoints = useApiQuery<PlotPoint[]>(
+    async () => (bookId ? plotPointRepository.list(bookId) : []),
     [bookId],
-    [] as PlotPoint[],
-  );
+  ) ?? [];
 
   // 实时监听当前作品的伏笔（按状态优先级排序）
-  const foreshadowing = useLiveQuery(
+  const foreshadowing = useApiQuery<Foreshadowing[]>(
     async () => {
-      if (!bookId) return [] as Foreshadowing[];
-      const list = await db.foreshadowing
-        .where('bookId')
-        .equals(bookId)
-        .toArray();
+      if (!bookId) return [];
+      const list = await foreshadowingRepository.list(bookId);
       return list.sort(
         (a, b) =>
           FORESHADOW_STATUS_ORDER[a.status] - FORESHADOW_STATUS_ORDER[b.status],
       );
     },
     [bookId],
-    [] as Foreshadowing[],
-  );
+  ) ?? [];
 
   // 实时监听当前作品的章节（按 order 升序）
-  const chapters = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as Chapter[];
-      return db.chapters.where('bookId').equals(bookId).sortBy('order');
-    },
+  const chapters = useApiQuery<Chapter[]>(
+    async () => (bookId ? chapterRepository.list(bookId) : []),
     [bookId],
-    [] as Chapter[],
-  );
+  ) ?? [];
 
   const [tab, setTab] = useState<PlotTab>('lines');
   const [foreshadowFilter, setForeshadowFilter] = useState<ForeshadowStatus | 'all'>('all');
@@ -119,13 +107,13 @@ export default function PlotPage() {
   /** 时间线拖拽重排：批量更新 timelineOrder */
   const handleTimelineReorder = async (reordered: PlotPoint[]): Promise<void> => {
     try {
-      await db.transaction('rw', db.plotPoints, async () => {
-        for (const p of reordered) {
-          if (p.timelineOrder !== (await db.plotPoints.get(p.id))?.timelineOrder) {
-            await plotPointRepository.update(p.id, { timelineOrder: p.timelineOrder });
-          }
+      // 后端无事务支持，循环 update；通过 get 比对避免无效写入
+      for (const p of reordered) {
+        const current = await plotPointRepository.get(p.id);
+        if (current && p.timelineOrder !== current.timelineOrder) {
+          await plotPointRepository.update(p.id, { timelineOrder: p.timelineOrder });
         }
-      });
+      }
       useToastStore.getState().pushToast('success', '时间线顺序已更新');
     } catch (err) {
       useToastStore

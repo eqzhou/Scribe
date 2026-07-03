@@ -2,14 +2,13 @@
  * 灵感库页面
  *
  * 顶部欢迎区 + QuickNote 速记框 + 工具栏（分类筛选 + 搜索 + 计数）+ 瀑布流卡片。
- * useLiveQuery 监听当前作品的灵感（按 createdAt 倒序）。
+ * useApiQuery 轮询当前作品的灵感（按 createdAt 倒序）。
  * 点击卡片打开编辑 Modal（内联实现，含删除二次确认）。
  */
 import { useMemo, useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Search, Trash2 } from 'lucide-react';
-import { db } from '../lib/db';
 import { inspirationRepository } from '../lib/repositories';
+import { useApiQuery } from '../hooks/useApiQuery';
 import { useBook } from '../hooks';
 import { useToastStore } from '../stores';
 import type { Inspiration } from '../types';
@@ -25,12 +24,12 @@ export default function InspirationPage() {
   const bookId = book?.id ?? null;
 
   // 实时监听当前作品的灵感（createdAt 倒序，最新在前）
-  // 注意：不传默认值，初始为 undefined 以区分"加载中"与"已加载空列表"
-  const inspirations = useLiveQuery(
+  // 注意：useApiQuery 在加载未完成时返回 undefined，已加载空列表时返回 []
+  const inspirations = useApiQuery<Inspiration[]>(
     async () => {
-      if (!bookId) return [] as Inspiration[];
-      const list = await db.inspiration.where('bookId').equals(bookId).toArray();
-      return list.sort((a, b) => b.createdAt - a.createdAt);
+      if (!bookId) return [];
+      const list = await inspirationRepository.list(bookId);
+      return list.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
     },
     [bookId],
   );

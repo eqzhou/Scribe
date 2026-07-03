@@ -12,14 +12,14 @@
  * 主文件负责状态管理、副作用、提交/删除/关系处理逻辑，并组合各分区子组件。
  */
 import { useEffect, useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { X, Sparkles, Loader2 } from 'lucide-react';
-import { db } from '../../lib/db';
 import {
   characterRepository,
   relationRepository,
   worldviewRepository,
+  chapterRepository,
 } from '../../lib/repositories';
+import { useApiQuery } from '../../hooks/useApiQuery';
 import { executeCharacterGenerate, isValidRole } from '../../lib/aiTools';
 import { useToastStore, useBookStore } from '../../stores';
 import { syncCharacterWorldviewRelations } from '../../lib/relationSync';
@@ -106,28 +106,22 @@ export function CharacterForm({
   const [arcView, setArcView] = useState<'text' | 'timeline'>('text');
 
   // 实时监听当前作品全部角色（供关系选择与名称查询）
-  const allCharacters = useLiveQuery(
-    () => db.characters.where('bookId').equals(bookId).toArray(),
+  const allCharacters = useApiQuery<Character[]>(
+    async () => characterRepository.list(bookId),
     [bookId],
-    [] as Character[],
-  );
+  ) ?? [];
 
   // 实时监听当前作品全部世界观条目（供关联多选）
-  const allWorldview = useLiveQuery(
-    () => db.worldview.where('bookId').equals(bookId).toArray(),
+  const allWorldview = useApiQuery<WorldviewEntry[]>(
+    async () => worldviewRepository.list(bookId),
     [bookId],
-    [] as WorldviewEntry[],
-  );
+  ) ?? [];
 
   // 编辑模式：实时监听当前角色的全部关系（双向）
-  const charRelations = useLiveQuery(
-    async () => {
-      if (!charId) return [];
-      return relationRepository.listByCharacter(charId);
-    },
+  const charRelations = useApiQuery<CharacterRelation[]>(
+    async () => (charId ? relationRepository.listByCharacter(charId) : []),
     [charId],
-    [] as CharacterRelation[],
-  );
+  ) ?? [];
 
   // 弹窗打开或目标变化时同步表单
   useEffect(() => {
@@ -181,7 +175,7 @@ export function CharacterForm({
       // 姓名变更时扫描章节中引用该角色的 CharacterMention 节点
       let mentionCount = 0;
       if (nameChanged) {
-        const chapters = await db.chapters.where('bookId').equals(bookId).toArray();
+        const chapters = await chapterRepository.list(bookId);
         mentionCount = chapters.filter((c) => c.content.includes(character!.id)).length;
       }
 
@@ -284,34 +278,27 @@ export function CharacterForm({
     if (!character) return;
     setDeleting(true);
     try {
-      await db.transaction(
-        'rw',
-        [db.characters, db.relations, db.worldview],
-        async () => {
-          // 1. 删除涉及该角色的全部关系
-          const rels = await relationRepository.listByCharacter(character.id);
-          for (const rel of rels) {
-            await relationRepository.delete(rel.id);
-          }
-          // 2. 清理世界观条目的反向引用
-          if ((character.relatedWorldviewIds ?? []).length > 0) {
-            const linkedEntries = await db.worldview
-              .where('id')
-              .anyOf(character.relatedWorldviewIds ?? [])
-              .toArray();
-            for (const entry of linkedEntries) {
-              const next = entry.relatedCharacterIds.filter(
-                (id) => id !== character.id,
-              );
-              await worldviewRepository.update(entry.id, {
-                relatedCharacterIds: next,
-              });
-            }
-          }
-          // 3. 删除角色本身
-          await characterRepository.delete(character.id);
-        },
-      );
+      // 1. 删除涉及该角色的全部关系
+      const rels = await relationRepository.listByCharacter(character.id);
+      for (const rel of rels) {
+        await relationRepository.delete(rel.id);
+      }
+      // 2. 清理世界观条目的反向引用
+      if ((character.relatedWorldviewIds ?? []).length > 0) {
+        const linkedEntries = await worldviewRepository.listByIds(
+          character.relatedWorldviewIds ?? [],
+        );
+        for (const entry of linkedEntries) {
+          const next = entry.relatedCharacterIds.filter(
+            (id) => id !== character.id,
+          );
+          await worldviewRepository.update(entry.id, {
+            relatedCharacterIds: next,
+          });
+        }
+      }
+      // 3. 删除角色本身
+      await characterRepository.delete(character.id);
       onDeleted?.(character.id);
       onClose();
     } catch (err) {
@@ -560,7 +547,7 @@ async function applyNameSync(
   newName: string,
   bookId: string,
 ): Promise<void> {
-  const chapters = await db.chapters.where('bookId').equals(bookId).toArray();
+  const chapters = await chapterRepository.list(bookId);
   // 转义正则特殊字符
   const escapeReg = (s: string): string =>
     s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -568,13 +555,12 @@ async function applyNameSync(
     `(<span[^>]*data-character-id="${escapeReg(characterId)}"[^>]*data-label=")${escapeReg(oldName)}(")(.*?>@)${escapeReg(oldName)}(<\\/span>)`,
     'g',
   );
-  await db.transaction('rw', db.chapters, async () => {
-    for (const ch of chapters) {
-      if (!ch.content.includes(characterId)) continue;
-      const next = ch.content.replace(labelRe, `$1${newName}$2$3${newName}$4`);
-      if (next !== ch.content) {
-        await db.chapters.update(ch.id, { content: next, updatedAt: Date.now() });
-      }
+  // 后端无事务支持，循环 update；部分失败时由后端返回错误
+  for (const ch of chapters) {
+    if (!ch.content.includes(characterId)) continue;
+    const next = ch.content.replace(labelRe, `$1${newName}$2$3${newName}$4`);
+    if (next !== ch.content) {
+      await chapterRepository.update(ch.id, { content: next });
     }
-  });
+  }
 }

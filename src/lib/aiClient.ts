@@ -49,12 +49,24 @@ async function streamRequest(
   signal?: AbortSignal,
 ): Promise<void> {
   try {
+    const token = localStorage.getItem('scribe-token') ?? '';
     const res = await fetch(`${AI_BASE}${endpoint}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(body),
       signal,
     });
+
+    if (res.status === 401) {
+      localStorage.removeItem('scribe-token');
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+      throw new Error('登录已失效，请重新登录');
+    }
 
     if (!res.ok) {
       const errText = await res.text().catch(() => res.statusText);

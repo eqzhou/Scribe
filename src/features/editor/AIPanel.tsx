@@ -11,8 +11,8 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Sparkles, MessageSquare, Globe, ListTree, Loader2, Copy, Check } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../lib/db';
+import { characterRepository, worldviewRepository, plotPointRepository } from '../../lib/repositories';
+import { useApiQuery } from '../../hooks/useApiQuery';
 import { useAIStore, useToastStore } from '../../stores';
 import { executeDialogue, executeWorldview, executeOutline } from '../../lib/aiTools';
 import type { Character, WorldviewCategory } from '../../types';
@@ -139,14 +139,10 @@ function DialogueForm({ bookId, aiBusy }: { bookId: string; aiBusy: boolean }) {
   const [scene, setScene] = useState('');
   const [topic, setTopic] = useState('');
 
-  const characters = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as Character[];
-      return db.characters.where('bookId').equals(bookId).toArray();
-    },
+  const characters = useApiQuery<Character[]>(
+    async () => (bookId ? characterRepository.list(bookId) : []),
     [bookId],
-    [],
-  );
+  ) ?? [];
 
   const handleGenerate = async (): Promise<void> => {
     if (!characterId) {
@@ -157,7 +153,7 @@ function DialogueForm({ bookId, aiBusy }: { bookId: string; aiBusy: boolean }) {
       pushToast('warning', '请输入对话话题');
       return;
     }
-    const character = characters?.find((c) => c.id === characterId);
+    const character = characters.find((c) => c.id === characterId);
     if (!character) return;
 
     try {
@@ -169,7 +165,7 @@ function DialogueForm({ bookId, aiBusy }: { bookId: string; aiBusy: boolean }) {
         },
         scene || '未指定场景',
         topic,
-        (characters ?? [])
+        characters
           .filter((c) => c.id !== characterId)
           .slice(0, 3)
           .map((c) => ({ name: c.name, personality: c.personality })),
@@ -189,7 +185,7 @@ function DialogueForm({ bookId, aiBusy }: { bookId: string; aiBusy: boolean }) {
           className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs text-foreground focus:border-secondary focus:outline-none"
         >
           <option value="">选择角色…</option>
-          {characters?.map((c) => (
+          {characters.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
@@ -225,14 +221,10 @@ function WorldviewForm({ bookId, aiBusy }: { bookId: string; aiBusy: boolean }) 
   const [category, setCategory] = useState<WorldviewCategory>('geography');
   const [topic, setTopic] = useState('');
 
-  const existing = useLiveQuery(
-    async () => {
-      if (!bookId) return [];
-      return db.worldview.where('bookId').equals(bookId).toArray();
-    },
+  const existing = useApiQuery(
+    async () => (bookId ? worldviewRepository.list(bookId) : []),
     [bookId],
-    [],
-  );
+  ) ?? [];
 
   const handleGenerate = async (): Promise<void> => {
     if (!topic.trim()) {
@@ -243,7 +235,7 @@ function WorldviewForm({ bookId, aiBusy }: { bookId: string; aiBusy: boolean }) 
       await executeWorldview(
         category,
         topic,
-        (existing ?? []).map((w) => ({ title: w.title, content: w.content.replace(/<[^>]+>/g, '').slice(0, 100) })),
+        existing.map((w) => ({ title: w.title, content: w.content.replace(/<[^>]+>/g, '').slice(0, 100) })),
         () => {},
       );
     } catch {
@@ -285,35 +277,23 @@ function OutlineForm({ bookId, aiBusy }: { bookId: string; aiBusy: boolean }) {
   const pushToast = useToastStore((s) => s.pushToast);
   const [chapterCount, setChapterCount] = useState(5);
 
-  const plotPoints = useLiveQuery(
-    async () => {
-      if (!bookId) return [];
-      return db.plotPoints.where('bookId').equals(bookId).toArray();
-    },
+  const plotPoints = useApiQuery(
+    async () => (bookId ? plotPointRepository.list(bookId) : []),
     [bookId],
-    [],
-  );
+  ) ?? [];
 
-  const characters = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as Character[];
-      return db.characters.where('bookId').equals(bookId).toArray();
-    },
+  const characters = useApiQuery<Character[]>(
+    async () => (bookId ? characterRepository.list(bookId) : []),
     [bookId],
-    [],
-  );
+  ) ?? [];
 
-  const worldview = useLiveQuery(
-    async () => {
-      if (!bookId) return [];
-      return db.worldview.where('bookId').equals(bookId).toArray();
-    },
+  const worldview = useApiQuery(
+    async () => (bookId ? worldviewRepository.list(bookId) : []),
     [bookId],
-    [],
-  );
+  ) ?? [];
 
   const handleGenerate = async (): Promise<void> => {
-    if ((plotPoints ?? []).length === 0) {
+    if (plotPoints.length === 0) {
       pushToast('warning', '请先在剧情页创建剧情节点');
       return;
     }
@@ -321,9 +301,9 @@ function OutlineForm({ bookId, aiBusy }: { bookId: string; aiBusy: boolean }) {
       const items = await executeOutline(
         bookId,
         undefined,
-        (plotPoints ?? []).map((p) => ({ title: p.title, description: p.description })),
-        (characters ?? []).map((c) => ({ name: c.name, role: c.role, personality: c.personality })),
-        (worldview ?? []).map((w) => ({ title: w.title, content: w.content.replace(/<[^>]+>/g, '').slice(0, 200) })),
+        plotPoints.map((p) => ({ title: p.title, description: p.description })),
+        characters.map((c) => ({ name: c.name, role: c.role, personality: c.personality })),
+        worldview.map((w) => ({ title: w.title, content: w.content.replace(/<[^>]+>/g, '').slice(0, 200) })),
         chapterCount,
       );
       pushToast('success', `已生成 ${items.length} 章大纲`);
@@ -335,7 +315,7 @@ function OutlineForm({ bookId, aiBusy }: { bookId: string; aiBusy: boolean }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="rounded border border-border/60 bg-muted/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-        基于剧情页的 {plotPoints?.length ?? 0} 个节点 + {characters?.length ?? 0} 个角色，生成 {chapterCount} 章大纲。
+        基于剧情页的 {plotPoints.length} 个节点 + {characters.length} 个角色，生成 {chapterCount} 章大纲。
       </div>
       <Field label={`章节数：${chapterCount}`}>
         <input

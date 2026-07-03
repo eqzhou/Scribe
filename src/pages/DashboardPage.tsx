@@ -9,13 +9,18 @@
  * - 双栏：左侧热力图（1.6fr） + 右侧每日目标环（1fr）
  * - 全宽：最近编辑面板
  *
- * 数据：useLiveQuery 实时监听当前作品的 chapters / characters / worldview / writingLogs。
+ * 数据：useApiQuery 轮询当前作品的 chapters / characters / worldview / writingLogs。
  */
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { BookOpen, FileText, Users, Globe } from 'lucide-react';
-import { db } from '../lib/db';
+import {
+  chapterRepository,
+  characterRepository,
+  worldviewRepository,
+  writingLogRepository,
+} from '../lib/repositories';
+import { useApiQuery } from '../hooks/useApiQuery';
 import { useBook } from '../hooks';
 import { useSettingStore } from '../stores';
 import { todayDate } from '../utils/date';
@@ -37,59 +42,43 @@ export default function DashboardPage() {
   const bookId = book?.id ?? null;
 
   // 实时监听当前作品的章节（用于统计累计字数与已完成章节数）
-  const chapters = useLiveQuery(
-    async () => {
-      if (!bookId) return [];
-      return db.chapters.where('bookId').equals(bookId).toArray();
-    },
+  const chapters = useApiQuery(
+    async () => (bookId ? chapterRepository.list(bookId) : []),
     [bookId],
-    [],
-  );
+  ) ?? [];
 
   // 实时监听当前作品的角色数
-  const characters = useLiveQuery(
-    async () => {
-      if (!bookId) return [];
-      return db.characters.where('bookId').equals(bookId).toArray();
-    },
+  const characters = useApiQuery(
+    async () => (bookId ? characterRepository.list(bookId) : []),
     [bookId],
-    [],
-  );
+  ) ?? [];
 
   // 实时监听当前作品的世界观条目
-  const worldview = useLiveQuery(
-    async () => {
-      if (!bookId) return [];
-      return db.worldview.where('bookId').equals(bookId).toArray();
-    },
+  const worldview = useApiQuery(
+    async () => (bookId ? worldviewRepository.list(bookId) : []),
     [bookId],
-    [],
-  );
+  ) ?? [];
 
   // 实时监听当前作品的写作记录（用于欢迎区今日字数）
-  const writingLogs = useLiveQuery(
-    async () => {
-      if (!bookId) return [];
-      return db.writingLogs.where('bookId').equals(bookId).toArray();
-    },
+  const writingLogs = useApiQuery(
+    async () => (bookId ? writingLogRepository.list(bookId) : []),
     [bookId],
-    [],
-  );
+  ) ?? [];
 
   // 聚合统计数据（archived 章节不计入主进度统计）
   const stats = useMemo(() => {
-    const activeChapters = (chapters ?? []).filter((c) => c.status !== 'archived');
+    const activeChapters = chapters.filter((c) => c.status !== 'archived');
     const totalWords = activeChapters.reduce((sum, c) => sum + c.wordCount, 0);
     const doneChapters = activeChapters.filter((c) => c.status === 'done').length;
-    const characterCount = (characters ?? []).length;
-    const worldviewCount = (worldview ?? []).length;
+    const characterCount = characters.length;
+    const worldviewCount = worldview.length;
     return { totalWords, doneChapters, characterCount, worldviewCount };
   }, [chapters, characters, worldview]);
 
   // 今日字数与距目标差距
   const todayWords = useMemo(() => {
     const today = todayDate();
-    return (writingLogs ?? [])
+    return writingLogs
       .filter((l) => l.date === today)
       .reduce((sum, l) => sum + l.wordCount, 0);
   }, [writingLogs]);

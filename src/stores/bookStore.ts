@@ -31,7 +31,7 @@ export const useBookStore = create<BookStore>()(
       refreshBooks: async () => {
         // Book 为顶层实体，bookRepository.list 忽略 bookId 参数返回全部作品，
         // 此处传空串仅为满足 Repository<T> 的统一签名
-        const books = await bookRepository.list('');
+        const books = await bookRepository.list();
         set({ books });
         // 若当前无选中作品且有作品，默认选第一个
         if (!get().currentBookId && books.length > 0) {

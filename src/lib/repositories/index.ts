@@ -17,4 +17,4 @@ export { inspirationRepository, type InspirationRepository } from './inspiration
 export { writingLogRepository, type WritingLogRepository } from './writingLogRepository';
 
 // 通用接口与工厂函数，供自定义 Repository 复用
-export { type Repository, createRepository } from './baseRepository';
+export { type Repository, type ApiRepositoryConfig, createApiRepository } from './baseRepository';

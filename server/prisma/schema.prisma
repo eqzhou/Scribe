@@ -1,0 +1,343 @@
+// Scribe · 数据库 Schema
+//
+// 所有实体均绑定到 User（资产按用户/项目隔离）。
+// 章节正文不存数据库，由文件系统 file/{userId}/{bookTitle}/{chapterTitle}.md 持久化，
+// 数据库仅存元数据、关系、小字段（大纲/摘要/状态等）。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// 用户
+// ============================================================
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  displayName  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  books        Book[]
+  chapters     Chapter[]
+  characters   Character[]
+  worldview    WorldviewEntry[]
+  scenes       Scene[]
+  volumes      Volume[]
+  plotLines    PlotLine[]
+  plotPoints   PlotPoint[]
+  foreshadowing Foreshadowing[]
+  relations    CharacterRelation[]
+  inspiration  Inspiration[]
+  writingLogs  WritingLog[]
+}
+
+// ============================================================
+// 作品
+// ============================================================
+
+model Book {
+  id           String   @id @default(cuid())
+  userId       String
+  title        String
+  subtitle     String   @default("")
+  synopsis     String   @default("") @db.Text
+  genre        String   @default("")
+  targetWords  Int      @default(50000)
+  coverColor   String   @default("#3b82f6")
+  dailyGoal    Int      @default(3000)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chapters     Chapter[]
+  characters   Character[]
+  worldview    WorldviewEntry[]
+  scenes       Scene[]
+  volumes      Volume[]
+  plotLines    PlotLine[]
+  plotPoints   PlotPoint[]
+  foreshadowing Foreshadowing[]
+  relations    CharacterRelation[]
+  inspiration  Inspiration[]
+  writingLogs  WritingLog[]
+
+  @@index([userId])
+  @@unique([userId, title])
+}
+
+// ============================================================
+// 卷宗
+// ============================================================
+
+model Volume {
+  id        String   @id @default(cuid())
+  bookId    String
+  userId    String
+  title     String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chapters  Chapter[]
+
+  @@index([bookId])
+  @@index([userId])
+}
+
+// ============================================================
+// 章节（正文存文件系统，数据库存元数据）
+// ============================================================
+
+model Chapter {
+  id         String   @id @default(cuid())
+  bookId     String
+  userId     String
+  volumeId   String?
+  title      String
+  // 正文以 Markdown 存于 file/{userId}/{bookTitle}/{chapterTitle}.md
+  // 数据库不存正文，避免大字段拖慢查询
+  summary    String   @default("") @db.Text
+  outline    String?  @db.Text
+  status     String   @default("draft") // draft/writing/done/archived
+  wordCount  Int      @default(0)
+  order      Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  book       Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  volume     Volume?  @relation(fields: [volumeId], references: [id], onDelete: SetNull)
+
+  @@index([bookId])
+  @@index([userId])
+  @@index([volumeId])
+  @@unique([bookId, title])
+}
+
+// ============================================================
+// 角色
+// ============================================================
+
+model Character {
+  id                  String   @id @default(cuid())
+  bookId              String
+  userId              String
+  name                String
+  alias               String   @default("")
+  faction             String   @default("")
+  role                String   @default("supporting") // protagonist/supporting/antagonist/minor
+  appearance          String   @default("") @db.Text
+  personality         String   @default("") @db.Text
+  background          String   @default("") @db.Text
+  arc                 String   @default("") @db.Text
+  birthday            String?
+  age                 Int?
+  appearanceColor     String   @default("#3b82f6")
+  tags                String[] @default([])
+  relatedWorldviewIds String[] @default([])
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  book                Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([bookId])
+  @@index([userId])
+  @@unique([bookId, name])
+}
+
+// ============================================================
+// 角色关系
+// ============================================================
+
+model CharacterRelation {
+  id          String   @id @default(cuid())
+  bookId      String
+  userId      String
+  fromId      String
+  toId        String
+  type        String   @default("other") // family/friend/rival/lover/mentor/subordinate/other
+  description String   @default("") @db.Text
+  createdAt   DateTime @default(now())
+
+  book        Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([bookId])
+  @@index([userId])
+  @@index([fromId])
+  @@index([toId])
+}
+
+// ============================================================
+// 世界观条目
+// ============================================================
+
+model WorldviewEntry {
+  id                   String   @id @default(cuid())
+  bookId               String
+  userId               String
+  category             String   // geography/history/faction/system/culture/item
+  title                String
+  content              String   @default("") @db.Text
+  tags                 String[] @default([])
+  relatedCharacterIds  String[] @default([])
+  relatedSceneIds      String[] @default([])
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  book                 Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([bookId])
+  @@index([userId])
+  @@unique([bookId, category, title])
+}
+
+// ============================================================
+// 场景
+// ============================================================
+
+model Scene {
+  id                 String   @id @default(cuid())
+  bookId             String
+  userId             String
+  name               String
+  description        String   @default("") @db.Text
+  atmosphere         String[] @default([])
+  geography          String?
+  worldviewEntryIds  String[] @default([])
+  characterIds       String[] @default([])
+  chapterIds         String[] @default([])
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  book               Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([bookId])
+  @@index([userId])
+  @@unique([bookId, name])
+}
+
+// ============================================================
+// 剧情线
+// ============================================================
+
+model PlotLine {
+  id        String   @id @default(cuid())
+  bookId    String
+  userId    String
+  title     String
+  type      String   @default("main") // main/sub
+  synopsis  String   @default("") @db.Text
+  status    String   @default("planning") // planning/writing/done/shelved
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  points    PlotPoint[]
+
+  @@index([bookId])
+  @@index([userId])
+  @@unique([bookId, title])
+}
+
+model PlotPoint {
+  id             String   @id @default(cuid())
+  bookId         String
+  userId         String
+  plotLineId     String
+  title          String
+  description    String   @default("") @db.Text
+  chapterId      String?
+  characterIds   String[] @default([])
+  order          Int      @default(0)
+  timelineOrder  Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  book           Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plotLine       PlotLine @relation(fields: [plotLineId], references: [id], onDelete: Cascade)
+
+  @@index([bookId])
+  @@index([userId])
+  @@index([plotLineId])
+}
+
+// ============================================================
+// 伏笔
+// ============================================================
+
+model Foreshadowing {
+  id              String   @id @default(cuid())
+  bookId          String
+  userId          String
+  title           String
+  description     String   @default("") @db.Text
+  setupChapterId  String?
+  payoffChapterId String?
+  status          String   @default("pending") // pending/planted/paidoff/abandoned
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  book            Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([bookId])
+  @@index([userId])
+}
+
+// ============================================================
+// 灵感卡片
+// ============================================================
+
+model Inspiration {
+  id        String   @id @default(cuid())
+  bookId    String
+  userId    String
+  title     String
+  content   String   @default("") @db.Text
+  tags      String[] @default([])
+  category  String   @default("")
+  createdAt DateTime @default(now())
+
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([bookId])
+  @@index([userId])
+}
+
+// ============================================================
+// 写作记录（日字数热力图）
+// ============================================================
+
+model WritingLog {
+  id        String   @id @default(cuid())
+  bookId    String
+  userId    String
+  date      String   // YYYY-MM-DD
+  wordCount Int      @default(0)
+  duration  Int      @default(0) // 秒
+  createdAt DateTime @default(now())
+
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([bookId])
+  @@index([userId])
+  @@unique([bookId, date])
+}

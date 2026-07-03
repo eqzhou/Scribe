@@ -4,7 +4,6 @@
  * 将作品及其全部关联实体导出为 JSON 字符串，支持单作品导出与全量导出。
  * 顶层结构：{ version, exportedAt, books: ExportedBook[] }
  */
-import { db } from './db';
 import type {
   Book,
   WorldviewEntry,
@@ -19,6 +18,20 @@ import type {
   Inspiration,
   WritingLog,
 } from '../types';
+import {
+  bookRepository,
+  worldviewRepository,
+  characterRepository,
+  relationRepository,
+  plotLineRepository,
+  plotPointRepository,
+  foreshadowingRepository,
+  sceneRepository,
+  volumeRepository,
+  chapterRepository,
+  inspirationRepository,
+  writingLogRepository,
+} from './repositories';
 
 /** 导出版本号 */
 const EXPORT_VERSION = '1.0';
@@ -52,7 +65,7 @@ export interface ExportedBook extends Book {
  * @returns JSON 字符串
  */
 export async function exportBook(bookId: string): Promise<string> {
-  const book = await db.books.get(bookId);
+  const book = await bookRepository.get(bookId);
   if (!book) {
     throw new Error(`作品 ${bookId} 不存在，无法导出`);
   }
@@ -71,7 +84,7 @@ export async function exportBook(bookId: string): Promise<string> {
  * @returns JSON 字符串
  */
 export async function exportAll(): Promise<string> {
-  const books = await db.books.toArray();
+  const books = await bookRepository.list();
   const exportedBooks = await Promise.all(books.map(collectBookData));
   const data: ExportData = {
     version: EXPORT_VERSION,
@@ -83,7 +96,7 @@ export async function exportAll(): Promise<string> {
 
 /**
  * 收集单部作品的全部关联数据。
- * 并行查询 11 张关联表，提升导出速度。
+ * 并行查询 11 张关联表的 repository.list，提升导出速度。
  */
 async function collectBookData(book: Book): Promise<ExportedBook> {
   const bookId = book.id;
@@ -100,17 +113,17 @@ async function collectBookData(book: Book): Promise<ExportedBook> {
     inspiration,
     writingLogs,
   ] = await Promise.all([
-    db.worldview.where('bookId').equals(bookId).toArray(),
-    db.characters.where('bookId').equals(bookId).toArray(),
-    db.relations.where('bookId').equals(bookId).toArray(),
-    db.plotLines.where('bookId').equals(bookId).toArray(),
-    db.plotPoints.where('bookId').equals(bookId).toArray(),
-    db.foreshadowing.where('bookId').equals(bookId).toArray(),
-    db.scenes.where('bookId').equals(bookId).toArray(),
-    db.volumes.where('bookId').equals(bookId).toArray(),
-    db.chapters.where('bookId').equals(bookId).toArray(),
-    db.inspiration.where('bookId').equals(bookId).toArray(),
-    db.writingLogs.where('bookId').equals(bookId).toArray(),
+    worldviewRepository.list(bookId),
+    characterRepository.list(bookId),
+    relationRepository.list(bookId),
+    plotLineRepository.list(bookId),
+    plotPointRepository.list(bookId),
+    foreshadowingRepository.list(bookId),
+    sceneRepository.list(bookId),
+    volumeRepository.list(bookId),
+    chapterRepository.list(bookId),
+    inspirationRepository.list(bookId),
+    writingLogRepository.list(bookId),
   ]);
 
   return {

@@ -8,9 +8,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../lib/db';
 import { Plus } from 'lucide-react';
+import { sceneRepository } from '../lib/repositories';
+import { useApiQuery } from '../hooks/useApiQuery';
 import { useBook } from '../hooks';
 import type { Scene } from '../types';
 import { Button, EmptyState, SkeletonGrid } from '../components/ui';
@@ -26,12 +26,9 @@ export default function ScenesPage() {
   const bookId = book?.id ?? null;
 
   // 实时监听当前作品的场景
-  // 注意：不传默认值，初始为 undefined 以区分"加载中"与"已加载空列表"
-  const scenes = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as Scene[];
-      return db.scenes.where('bookId').equals(bookId).toArray();
-    },
+  // 注意：useApiQuery 在加载未完成时返回 undefined，已加载空列表时返回 []
+  const scenes = useApiQuery<Scene[]>(
+    async () => (bookId ? sceneRepository.list(bookId) : []),
     [bookId],
   );
 

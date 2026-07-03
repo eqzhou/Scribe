@@ -5,13 +5,13 @@
  * 视图切换：卡片视图 / 图谱视图。
  * 顶部欢迎区：大标题「世界观」+ 副文案。
  *
- * 数据：useBook 获取当前作品；useLiveQuery 监听当前作品的全部世界观条目、
+ * 数据：useBook 获取当前作品；useApiQuery 轮询当前作品的全部世界观条目、
  * 角色、场景。卡片视图按分类聚合计数与列表。图谱视图展示关联关系。
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../lib/db';
+import { worldviewRepository, characterRepository, sceneRepository } from '../lib/repositories';
+import { useApiQuery } from '../hooks/useApiQuery';
 import { useBook } from '../hooks';
 import type {
   Character,
@@ -76,31 +76,21 @@ function emptyCounts(): CategoryCounts {
 export default function WorldviewPage() {
   const bookId = useBook()?.id ?? null;
 
-  const entries = useLiveQuery(
-    async () => {
-      if (!bookId) return [];
-      return db.worldview.where('bookId').equals(bookId).toArray();
-    },
+  const entriesData = useApiQuery<WorldviewEntry[]>(
+    async () => (bookId ? worldviewRepository.list(bookId) : []),
     [bookId],
   );
+  const entries = entriesData;
 
-  const characters = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as Character[];
-      return db.characters.where('bookId').equals(bookId).toArray();
-    },
+  const characters = useApiQuery<Character[]>(
+    async () => (bookId ? characterRepository.list(bookId) : []),
     [bookId],
-    [] as Character[],
-  );
+  ) ?? [];
 
-  const scenes = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as Scene[];
-      return db.scenes.where('bookId').equals(bookId).toArray();
-    },
+  const scenes = useApiQuery<Scene[]>(
+    async () => (bookId ? sceneRepository.list(bookId) : []),
     [bookId],
-    [] as Scene[],
-  );
+  ) ?? [];
 
   const { counts, byCategory } = useMemo(() => {
     const counts = emptyCounts();
@@ -117,7 +107,7 @@ export default function WorldviewPage() {
       byCategory[e.category].push(e);
     }
     for (const cat of Object.keys(byCategory) as WorldviewCategory[]) {
-      byCategory[cat].sort((a, b) => b.updatedAt - a.updatedAt);
+      byCategory[cat].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
     }
     return { counts, byCategory };
   }, [entries]);
@@ -162,8 +152,8 @@ export default function WorldviewPage() {
   const currentList = byCategory[active] ?? [];
   const currentLabel = CATEGORY_LABEL[active];
   const entryList = entries ?? [];
-  const charList = characters ?? [];
-  const sceneList = scenes ?? [];
+  const charList = characters;
+  const sceneList = scenes;
 
   return (
     <div className="px-8 py-6">

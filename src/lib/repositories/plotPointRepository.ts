@@ -3,9 +3,9 @@
  *
  * list 按 bookId 过滤；额外提供 listByPlotLine 查询指定剧情线下的全部节点。
  */
-import { db } from '../db';
+import { apiGet } from '../api';
 import type { PlotPoint } from '../../types';
-import { createRepository, type Repository } from './baseRepository';
+import { createApiRepository, type Repository } from './baseRepository';
 
 /** 剧情节点 Repository 接口：扩展 listByPlotLine 关联查询 */
 export interface PlotPointRepository extends Repository<PlotPoint> {
@@ -13,17 +13,25 @@ export interface PlotPointRepository extends Repository<PlotPoint> {
   listByPlotLine(plotLineId: string): Promise<PlotPoint[]>;
 }
 
+/** 按 order 升序排序 */
+function sortByOrder(items: PlotPoint[]): PlotPoint[] {
+  return [...items].sort((a, b) => a.order - b.order);
+}
+
 export const plotPointRepository: PlotPointRepository = {
-  ...createRepository<PlotPoint>(
-    db.plotPoints,
-    async bookId => db.plotPoints.where('bookId').equals(bookId).toArray(),
-  ),
+  ...createApiRepository<PlotPoint>({
+    entityPath: (id) => `/api/plotPoints/${id}`,
+    collectionPath: (bookId) => `/api/books/${bookId}/plotPoints`,
+  }),
+
+  // 覆盖 list：默认按 bookId 列出
+  async list(bookId: string): Promise<PlotPoint[]> {
+    const items = await apiGet<PlotPoint[]>(`/api/books/${bookId}/plotPoints`);
+    return items ?? [];
+  },
 
   async listByPlotLine(plotLineId: string): Promise<PlotPoint[]> {
-    // plotLineId 已建立索引，按 order 升序返回节点
-    return db.plotPoints
-      .where('plotLineId')
-      .equals(plotLineId)
-      .sortBy('order');
+    const items = await apiGet<PlotPoint[]>(`/api/plotLines/${plotLineId}/plotPoints`);
+    return sortByOrder(items ?? []);
   },
 };

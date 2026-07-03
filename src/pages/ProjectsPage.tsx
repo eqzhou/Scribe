@@ -10,16 +10,16 @@
  * - 空状态（EmptyState，glyph="墨"）
  * - 作品切换：点击卡片设为当前作品并跳转工作台
  *
- * 数据：使用 useLiveQuery 监听 db.books 与 db.chapters，实时反映变更。
+ * 数据：使用 useApiQuery 轮询 books 与 chapters，实时反映变更。
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Plus } from 'lucide-react';
-import { db } from '../lib/db';
+import { bookRepository, chapterRepository, characterRepository, worldviewRepository } from '../lib/repositories';
+import { useApiQuery } from '../hooks/useApiQuery';
 import { deleteBookCascade } from '../lib/importer';
 import { useBookStore } from '../stores';
-import type { Book } from '../types';
+import type { Book, Chapter } from '../types';
 import { Button, ConfirmDialog, EmptyState, SkeletonGrid } from '../components/ui';
 import { BookCard } from '../features/projects/BookCard';
 import { BookForm } from '../features/projects/BookForm';
@@ -37,27 +37,42 @@ interface DeleteTarget {
  */
 export default function ProjectsPage() {
   const navigate = useNavigate();
-  const { currentBookId, setCurrentBook, refreshBooks } = useBookStore();
+  const { currentBookId, setCurrentBook, refreshBooks, books: storeBooks } = useBookStore();
 
-  // 实时监听作品列表（按 updatedAt 倒序）
-  const books = useLiveQuery(
-    () => db.books.orderBy('updatedAt').reverse().toArray(),
-    [],
-  );
+  // 首次进入刷新 store（保证最新列表）
+  useEffect(() => {
+    void refreshBooks();
+  }, [refreshBooks]);
+
+  // 实时监听作品列表（store.books 已按 updatedAt 倒序刷新）
+  const books = useApiQuery<Book[]>(() => bookRepository.list(), []);
+  const list = books ?? storeBooks;
+
+  // 按 updatedAt 倒序
+  const sortedBooks = useMemo(() => {
+    return [...list].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+  }, [list]);
 
   // 实时监听全部章节（用于按作品聚合章节数与字数）
-  const chapters = useLiveQuery(() => db.chapters.toArray(), []);
+  // 后端无跨作品列表端点，按 books 并发拉取
+  const chapters = useApiQuery<Chapter[]>(
+    async () => {
+      const bs = books ?? storeBooks;
+      if (bs.length === 0) return [];
+      const nested = await Promise.all(bs.map((b) => chapterRepository.list(b.id)));
+      return nested.flat();
+    },
+    [list.length],
+  ) ?? [];
 
   // 按作品 ID 聚合：章节数 + 累计字数
   const statsByBook = useMemo(() => {
     const map = new Map<string, { chapterCount: number; wordCount: number }>();
-    if (chapters) {
-      for (const c of chapters) {
-        const prev = map.get(c.bookId) ?? { chapterCount: 0, wordCount: 0 };
-        prev.chapterCount += 1;
-        prev.wordCount += c.wordCount;
-        map.set(c.bookId, prev);
-      }
+    for (const c of chapters) {
+      const prev = map.get(c.bookId) ?? { chapterCount: 0, wordCount: 0 };
+      prev.chapterCount += 1;
+      prev.wordCount += c.wordCount;
+      map.set(c.bookId, prev);
     }
     return map;
   }, [chapters]);
@@ -94,9 +109,9 @@ export default function ProjectsPage() {
   /** 触发删除：先查询影响范围再弹出确认框 */
   const handleDelete = async (book: Book): Promise<void> => {
     const [chapterCount, characterCount, worldviewCount] = await Promise.all([
-      db.chapters.where('bookId').equals(book.id).count(),
-      db.characters.where('bookId').equals(book.id).count(),
-      db.worldview.where('bookId').equals(book.id).count(),
+      chapterRepository.list(book.id).then((arr) => arr.length),
+      characterRepository.list(book.id).then((arr) => arr.length),
+      worldviewRepository.list(book.id).then((arr) => arr.length),
     ]);
     setDeleteTarget({ book, chapterCount, characterCount, worldviewCount });
   };
@@ -116,7 +131,7 @@ export default function ProjectsPage() {
   };
 
   // 加载中状态
-  const loading = books === undefined;
+  const loading = list.length === 0 && books === undefined;
 
   return (
     <div className="px-8 py-6">
@@ -146,7 +161,7 @@ export default function ProjectsPage() {
       {/* 内容区 */}
       {loading ? (
         <SkeletonGrid count={6} minColumnWidth={280} />
-      ) : (books?.length ?? 0) === 0 ? (
+      ) : sortedBooks.length === 0 ? (
         <EmptyState
           glyph="墨"
           title="尚无作品"
@@ -160,7 +175,7 @@ export default function ProjectsPage() {
             gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
           }}
         >
-          {(books ?? []).map((book) => {
+          {sortedBooks.map((book) => {
             const stats = statsByBook.get(book.id) ?? {
               chapterCount: 0,
               wordCount: 0,

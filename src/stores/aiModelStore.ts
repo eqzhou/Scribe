@@ -6,6 +6,7 @@
  */
 import { create } from 'zustand';
 import type { AIModel, ModelProvider, ModelCapability, ProviderMeta } from '../types';
+import { apiGet, apiPost, apiPut, apiDelete } from '../lib/api';
 
 const API_BASE = '/api/models';
 
@@ -141,9 +142,7 @@ export const useAIModelStore = create<AIModelStore>((set, get) => ({
   fetchModels: async () => {
     set({ loading: true, error: null });
     try {
-      const res = await fetch(API_BASE);
-      if (!res.ok) throw new Error(`拉取模型列表失败 (${res.status})`);
-      const data = await res.json() as { models: Record<string, unknown>[]; activeModelId: string | null };
+      const data = await apiGet<{ models: Record<string, unknown>[]; activeModelId: string | null }>(API_BASE);
       const models = data.models.map(normalizeModel);
       const activeId = data.activeModelId ?? null;
       set({ models, activeModelId: activeId, loading: false, error: null });
@@ -195,16 +194,7 @@ export const useAIModelStore = create<AIModelStore>((set, get) => ({
       maxTokens: model.maxTokens,
       capabilities: model.capabilities?.length ? model.capabilities : ALL_CAPABILITIES,
     };
-    const res = await fetch(API_BASE, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`创建模型失败 (${res.status}): ${text}`);
-    }
-    const created = normalizeModel(await res.json() as Record<string, unknown>);
+    const created = normalizeModel(await apiPost<Record<string, unknown>>(API_BASE, body));
     const next = [...get().models, created];
     set({ models: next });
     if (created.isDefault || next.length === 1) {
@@ -225,26 +215,13 @@ export const useAIModelStore = create<AIModelStore>((set, get) => ({
     if (patch.maxTokens !== undefined) body.maxTokens = patch.maxTokens;
     if (patch.capabilities !== undefined) body.capabilities = patch.capabilities;
 
-    const res = await fetch(`${API_BASE}/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`更新模型失败 (${res.status}): ${text}`);
-    }
-    const updated = normalizeModel(await res.json() as Record<string, unknown>);
+    const updated = normalizeModel(await apiPut<Record<string, unknown>>(`${API_BASE}/${id}`, body));
     const next = get().models.map((m) => (m.id === id ? updated : m));
     set({ models: next });
   },
 
   deleteModel: async (id) => {
-    const res = await fetch(`${API_BASE}/${id}`, { method: 'DELETE' });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`删除模型失败 (${res.status}): ${text}`);
-    }
+    await apiDelete(`${API_BASE}/${id}`);
     const next = get().models.filter((m) => m.id !== id);
     // 删除的是当前激活模型时，切换到剩余的默认模型
     const { activeModelId } = get();
@@ -271,21 +248,16 @@ export const useAIModelStore = create<AIModelStore>((set, get) => ({
   setDefault: async (id) => {
     const target = get().models.find((m) => m.id === id);
     if (!target || !target.enabled) return;
-    const res = await fetch(`${API_BASE}/${id}/activate`, { method: 'POST' });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`设置默认模型失败 (${res.status}): ${text}`);
-    }
+    await apiPost(`${API_BASE}/${id}/activate`);
     const next = get().models.map((m) => ({ ...m, isDefault: m.id === id }));
     set({ models: next, activeModelId: id });
   },
 
   testModel: async (id) => {
-    const res = await fetch(`${API_BASE}/${id}/test`, { method: 'POST' });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      return { ok: false, message: `测试失败 (${res.status}): ${text}` };
+    try {
+      return await apiPost<{ ok: boolean; message: string }>(`${API_BASE}/${id}/test`);
+    } catch (err) {
+      return { ok: false, message: err instanceof Error ? err.message : '测试失败' };
     }
-    return (await res.json()) as { ok: boolean; message: string };
   },
 }));

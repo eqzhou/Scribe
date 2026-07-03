@@ -2,13 +2,13 @@
  * SettingSidebar 设定侧栏
  *
  * 右侧抽屉：三 Tab（角色 / 世界观 / 场景），对齐 uiStore.settingSidebarTab。
- * useLiveQuery 查当前作品设定列表，卡片列表展示（名称 + 简介）。
+ * useApiQuery 轮询当前作品设定列表，卡片列表展示（名称 + 简介）。
  * 点击展开/折叠详情，再点击跳转对应详情页。
  */
 import { useState, useMemo } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Sparkles, Search } from 'lucide-react';
-import { db } from '../../lib/db';
+import { characterRepository, worldviewRepository, sceneRepository } from '../../lib/repositories';
+import { useApiQuery } from '../../hooks/useApiQuery';
 import { useUIStore } from '../../stores';
 import type { Character, Scene, SettingSidebarTab, WorldviewEntry } from '../../types';
 import { cn } from '../../utils/cn';
@@ -38,36 +38,24 @@ export function SettingSidebar({ bookId }: SettingSidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
   // 实时监听三类设定
-  const characters = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as Character[];
-      return db.characters.where('bookId').equals(bookId).toArray();
-    },
+  const characters = useApiQuery<Character[]>(
+    async () => (bookId ? characterRepository.list(bookId) : []),
     [bookId],
-    [],
-  );
-  const worldviewEntries = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as WorldviewEntry[];
-      return db.worldview.where('bookId').equals(bookId).toArray();
-    },
+  ) ?? [];
+  const worldviewEntries = useApiQuery<WorldviewEntry[]>(
+    async () => (bookId ? worldviewRepository.list(bookId) : []),
     [bookId],
-    [],
-  );
-  const scenes = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as Scene[];
-      return db.scenes.where('bookId').equals(bookId).toArray();
-    },
+  ) ?? [];
+  const scenes = useApiQuery<Scene[]>(
+    async () => (bookId ? sceneRepository.list(bookId) : []),
     [bookId],
-    [],
-  );
+  ) ?? [];
 
   // 搜索过滤
   const filteredCharacters = useMemo(() => {
-    if (!searchQuery.trim()) return characters ?? [];
+    if (!searchQuery.trim()) return characters;
     const q = searchQuery.toLowerCase();
-    return (characters ?? []).filter(
+    return characters.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
         c.alias?.toLowerCase().includes(q) ||
@@ -78,9 +66,9 @@ export function SettingSidebar({ bookId }: SettingSidebarProps) {
   }, [characters, searchQuery]);
 
   const filteredWorldview = useMemo(() => {
-    if (!searchQuery.trim()) return worldviewEntries ?? [];
+    if (!searchQuery.trim()) return worldviewEntries;
     const q = searchQuery.toLowerCase();
-    return (worldviewEntries ?? []).filter(
+    return worldviewEntries.filter(
       (w) =>
         w.title.toLowerCase().includes(q) ||
         w.content.replace(/<[^>]+>/g, '').toLowerCase().includes(q) ||
@@ -89,9 +77,9 @@ export function SettingSidebar({ bookId }: SettingSidebarProps) {
   }, [worldviewEntries, searchQuery]);
 
   const filteredScenes = useMemo(() => {
-    if (!searchQuery.trim()) return scenes ?? [];
+    if (!searchQuery.trim()) return scenes;
     const q = searchQuery.toLowerCase();
-    return (scenes ?? []).filter(
+    return scenes.filter(
       (s) =>
         s.name.toLowerCase().includes(q) ||
         s.description?.toLowerCase().includes(q) ||

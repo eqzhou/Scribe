@@ -10,9 +10,8 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { List, BookOpen } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../lib/db';
 import { chapterRepository } from '../lib/repositories';
+import { useApiQuery } from '../hooks/useApiQuery';
 import { useBook, useChapters } from '../hooks';
 import { useEditorStore } from '../stores';
 import type { Chapter } from '../types';
@@ -39,14 +38,13 @@ export default function EditorPage() {
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
 
   // 实时监听当前章节对象（章节内容变化时自动刷新）
-  const chapter = useLiveQuery(
+  const chapter = useApiQuery<Chapter | null>(
     async () => {
       if (!currentChapterId) return null;
-      return (await db.chapters.get(currentChapterId)) ?? null;
+      return (await chapterRepository.get(currentChapterId)) ?? null;
     },
     [currentChapterId],
-    null as Chapter | null,
-  );
+  ) ?? null;
 
   // 无 currentChapterId 且有章节时，默认选第一章
   useEffect(() => {

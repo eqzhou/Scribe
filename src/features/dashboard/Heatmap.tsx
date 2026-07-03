@@ -7,8 +7,8 @@
  * - Framer Motion 微动效
  */
 import { useMemo, useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../lib/db';
+import { writingLogRepository } from '../../lib/repositories';
+import { useApiQuery } from '../../hooks/useApiQuery';
 import { todayDate } from '../../utils/date';
 import { formatWordCount } from '../../utils/wordCount';
 import { cn } from '../../utils/cn';
@@ -57,28 +57,22 @@ export function Heatmap({ bookId }: HeatmapProps) {
     y: number;
   } | null>(null);
 
-  const logs = useLiveQuery(
+  const logs = useApiQuery(
     async () => {
       if (!bookId) return [];
-      // 仅查询最近 TOTAL_CELLS 天的日志，避免长期使用后加载全量历史
+      // 后端按 bookId 列出全部写作记录；前端再过滤最近 TOTAL_CELLS 天
       const end = todayDate();
       const start = shiftDate(end, TOTAL_CELLS - 1);
-      return db.writingLogs
-        .where('date')
-        .between(start, end, true, true)
-        .and((l) => l.bookId === bookId)
-        .toArray();
+      const all = await writingLogRepository.list(bookId);
+      return all.filter((l) => l.date >= start && l.date <= end);
     },
     [bookId],
-    [],
-  );
+  ) ?? [];
 
   const cells = useMemo(() => {
     const map = new Map<string, number>();
-    if (logs) {
-      for (const log of logs) {
-        map.set(log.date, (map.get(log.date) ?? 0) + log.wordCount);
-      }
+    for (const log of logs) {
+      map.set(log.date, (map.get(log.date) ?? 0) + log.wordCount);
     }
     const today = todayDate();
     const result: { date: string; words: number; level: Level }[] = [];

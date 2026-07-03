@@ -3,9 +3,9 @@
  *
  * list 按 bookId 过滤；额外提供 listByDateRange 查询指定日期范围内的记录（用于热力图）。
  */
-import { db } from '../db';
+import { apiGet } from '../api';
 import type { WritingLog } from '../../types';
-import { createRepository, type Repository } from './baseRepository';
+import { createApiRepository, type Repository } from './baseRepository';
 
 /** 写作记录 Repository 接口：扩展 listByDateRange 范围查询 */
 export interface WritingLogRepository extends Repository<WritingLog> {
@@ -13,10 +13,30 @@ export interface WritingLogRepository extends Repository<WritingLog> {
   listByDateRange(bookId: string, startDate: string, endDate: string): Promise<WritingLog[]>;
 }
 
+/** 将 ISO 时间字符串转换为 Unix 毫秒；非字符串或非法值原样返回 */
+function toMs(v: unknown): unknown {
+  if (typeof v === 'string' && v.length > 0) {
+    const ms = new Date(v).getTime();
+    if (!Number.isNaN(ms)) return ms;
+  }
+  return v;
+}
+
 export const writingLogRepository: WritingLogRepository = {
-  ...createRepository<WritingLog>(db.writingLogs, async bookId =>
-    db.writingLogs.where('bookId').equals(bookId).toArray(),
-  ),
+  ...createApiRepository<WritingLog>({
+    entityPath: (id) => `/api/writingLogs/${id}`,
+    collectionPath: (bookId) => `/api/books/${bookId}/writingLogs`,
+  }),
+
+  // 覆盖 list：默认按 bookId 列出
+  async list(bookId: string): Promise<WritingLog[]> {
+    const items = await apiGet<WritingLog[]>(`/api/books/${bookId}/writingLogs`);
+    return (items ?? []).map((w) => {
+      const r = { ...w } as Record<string, unknown>;
+      r.createdAt = toMs(r.createdAt);
+      return r as unknown as WritingLog;
+    });
+  },
 
   async listByDateRange(
     bookId: string,
@@ -24,10 +44,12 @@ export const writingLogRepository: WritingLogRepository = {
     endDate: string,
   ): Promise<WritingLog[]> {
     // date 为 YYYY-MM-DD 字符串，按字典序比较等价于按日期比较
-    return db.writingLogs
-      .where('bookId')
-      .equals(bookId)
-      .and(item => item.date >= startDate && item.date <= endDate)
-      .toArray();
+    const path = `/api/books/${bookId}/writingLogs?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
+    const items = await apiGet<WritingLog[]>(path);
+    return (items ?? []).map((w) => {
+      const r = { ...w } as Record<string, unknown>;
+      r.createdAt = toMs(r.createdAt);
+      return r as unknown as WritingLog;
+    });
   },
 };

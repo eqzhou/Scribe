@@ -3,20 +3,35 @@
  *
  * list 按 bookId 过滤，按 createdAt 倒序排列（最新创意在前）。
  */
-import { db } from '../db';
+import { apiGet } from '../api';
 import type { Inspiration } from '../../types';
-import { createRepository, type Repository } from './baseRepository';
+import { createApiRepository, type Repository } from './baseRepository';
 
 export type InspirationRepository = Repository<Inspiration>;
 
-export const inspirationRepository: InspirationRepository = createRepository<Inspiration>(
-  db.inspiration,
-  async bookId => {
-    // createdAt 升序排序后反转，得到倒序（最新在前）
-    const items = await db.inspiration
-      .where('bookId')
-      .equals(bookId)
-      .sortBy('createdAt');
-    return items.reverse();
+/** 将 ISO 时间字符串转换为 Unix 毫秒；非字符串或非法值原样返回 */
+function toMs(v: unknown): unknown {
+  if (typeof v === 'string' && v.length > 0) {
+    const ms = new Date(v).getTime();
+    if (!Number.isNaN(ms)) return ms;
+  }
+  return v;
+}
+
+export const inspirationRepository: InspirationRepository = {
+  ...createApiRepository<Inspiration>({
+    entityPath: (id) => `/api/inspiration/${id}`,
+    collectionPath: (bookId) => `/api/books/${bookId}/inspiration`,
+  }),
+
+  // 覆盖 list：按 createdAt 倒序排列（最新在前）
+  async list(bookId: string): Promise<Inspiration[]> {
+    const items = await apiGet<Inspiration[]>(`/api/books/${bookId}/inspiration`);
+    const normalized = (items ?? []).map((i) => {
+      const r = { ...i } as Record<string, unknown>;
+      r.createdAt = toMs(r.createdAt);
+      return r as unknown as Inspiration;
+    });
+    return normalized.sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
   },
-);
+};

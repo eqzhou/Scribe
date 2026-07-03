@@ -10,8 +10,8 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Search, Download, Sun, Moon, Settings, ChevronDown } from 'lucide-react';
-import { useBookStore, useUIStore, useToastStore } from '../../stores';
+import { Search, Download, Sun, Moon, Settings, ChevronDown, LogOut } from 'lucide-react';
+import { useBookStore, useUIStore, useToastStore, useUserStore } from '../../stores';
 import type { ThemeMode } from '../../types';
 import { exportBook, downloadJson } from '../../lib/exporter';
 import { cn } from '../../utils/cn';
@@ -57,6 +57,8 @@ export default function Topbar() {
   const { books, currentBookId, setCurrentBook } = useBookStore();
   const { theme, setTheme, setGlobalSearchOpen } = useUIStore();
   const pushToast = useToastStore((s) => s.pushToast);
+  const user = useUserStore((s) => s.user);
+  const logout = useUserStore((s) => s.logout);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   // 下拉菜单键盘导航：当前高亮项索引
@@ -98,6 +100,13 @@ export default function Topbar() {
     } finally {
       setExporting(false);
     }
+  };
+
+  /** 登出：清除认证态并跳转登录页 */
+  const handleLogout = () => {
+    logout();
+    pushToast('success', '已登出');
+    navigate('/login', { replace: true });
   };
 
   return (
@@ -316,6 +325,39 @@ export default function Topbar() {
           )}
         >
           <Settings className="h-4 w-4" aria-hidden="true" />
+        </button>
+
+        {/* 用户名分隔条 */}
+        {user && (
+          <span
+            className="hidden sm:flex items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-2.5 py-1.5"
+            title={user.username}
+          >
+            <span
+              className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 font-sans text-[11px] font-semibold text-primary"
+              aria-hidden="true"
+            >
+              {(user.displayName || user.username).slice(0, 1).toUpperCase()}
+            </span>
+            <span className="max-w-[100px] truncate font-sans text-[12px] text-foreground">
+              {user.displayName || user.username}
+            </span>
+          </span>
+        )}
+
+        {/* 登出按钮 */}
+        <button
+          type="button"
+          title="登出"
+          aria-label="登出账号"
+          onClick={handleLogout}
+          className={cn(
+            'flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-muted/30',
+            'text-muted-foreground transition-all duration-200 shadow-sm active:scale-95',
+            'hover:border-destructive hover:bg-destructive/5 hover:text-destructive',
+          )}
+        >
+          <LogOut className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
     </header>

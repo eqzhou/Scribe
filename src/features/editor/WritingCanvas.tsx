@@ -20,9 +20,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Download, FileText } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../lib/db';
-import { chapterRepository } from '../../lib/repositories';
+import { chapterRepository, characterRepository, worldviewRepository } from '../../lib/repositories';
+import { useApiQuery } from '../../hooks/useApiQuery';
 import { downloadJson } from '../../lib/exporter';
 import type { Chapter, Character, WorldviewEntry } from '../../types';
 import type { RewriteStyle } from '../../types/ai';
@@ -84,22 +83,14 @@ export function WritingCanvas({ chapter, bookId }: WritingCanvasProps) {
   const notifiedDoneRef = useRef(false);
 
   // 实时监听角色与世界观（供插入提及/引用）
-  const characters = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as Character[];
-      return db.characters.where('bookId').equals(bookId).toArray();
-    },
+  const characters = useApiQuery<Character[]>(
+    async () => (bookId ? characterRepository.list(bookId) : []),
     [bookId],
-    [],
-  );
-  const worldviewEntries = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as WorldviewEntry[];
-      return db.worldview.where('bookId').equals(bookId).toArray();
-    },
+  ) ?? [];
+  const worldviewEntries = useApiQuery<WorldviewEntry[]>(
+    async () => (bookId ? worldviewRepository.list(bookId) : []),
     [bookId],
-    [],
-  );
+  ) ?? [];
 
   // TipTap 编辑器
   const editor = useEditor({

@@ -3,20 +3,40 @@
  *
  * 特殊：Book 为最顶层实体，无 bookId 字段，list 返回全部作品。
  */
-import { db } from '../db';
+import { apiGet } from '../api';
 import type { Book } from '../../types';
-import { createRepository, type Repository } from './baseRepository';
+import { createApiRepository, type Repository } from './baseRepository';
 
-export type BookRepository = Repository<Book>;
+export interface BookRepository extends Omit<Repository<Book>, 'list'> {
+  /** Book 为顶层实体，list 不需要 bookId 参数 */
+  list(): Promise<Book[]>;
+}
 
-/**
- * 作品 Repository 单例。
- * list 忽略 bookId 参数，返回数据库中的全部作品。
- */
-export const bookRepository: BookRepository = createRepository<Book>(
-  db.books,
-  async () => {
-    // 返回全部作品，按 updatedAt 倒序排列（最近更新的在前）
-    return db.books.orderBy('updatedAt').reverse().toArray();
+/** 将 ISO 时间字符串转换为 Unix 毫秒；非字符串或非法值原样返回 */
+function toMs(v: unknown): unknown {
+  if (typeof v === 'string' && v.length > 0) {
+    const ms = new Date(v).getTime();
+    if (!Number.isNaN(ms)) return ms;
+  }
+  return v;
+}
+
+export const bookRepository: BookRepository = {
+  ...createApiRepository<Book>({
+    entityPath: (id) => `/api/books/${id}`,
+    collectionPath: () => '/api/books',
+    // Book 为顶层实体，POST /api/books 即可
+    createPath: () => '/api/books',
+  }),
+
+  // 覆盖 list：Book 顶层实体，bookId 参数无意义，返回全部作品
+  async list(): Promise<Book[]> {
+    const items = await apiGet<Book[]>('/api/books');
+    return (items ?? []).map((b) => {
+      const r = { ...b } as Record<string, unknown>;
+      r.createdAt = toMs(r.createdAt);
+      r.updatedAt = toMs(r.updatedAt);
+      return r as unknown as Book;
+    });
   },
-);
+};

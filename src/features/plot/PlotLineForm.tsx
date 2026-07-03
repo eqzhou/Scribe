@@ -8,7 +8,6 @@
  */
 import { useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
-import { db } from '../../lib/db';
 import { plotLineRepository, plotPointRepository } from '../../lib/repositories';
 import { useDeleteWithImpact } from '../../hooks/useDeleteWithImpact';
 import type { PlotLine, PlotLineStatus, PlotLineType } from '../../types';
@@ -165,15 +164,13 @@ export function PlotLineForm({
     if (!plotLine) return;
     setDeleting(true);
     try {
-      await db.transaction('rw', [db.plotLines, db.plotPoints], async () => {
-        // 1. 删除该剧情线下的全部剧情节点
-        const points = await plotPointRepository.listByPlotLine(plotLine.id);
-        for (const p of points) {
-          await plotPointRepository.delete(p.id);
-        }
-        // 2. 删除剧情线本身
-        await plotLineRepository.delete(plotLine.id);
-      });
+      // 后端无事务支持，按顺序删除：先删关联剧情节点，再删剧情线本身
+      // 部分失败时由后端返回错误，前端给出提示
+      const points = await plotPointRepository.listByPlotLine(plotLine.id);
+      for (const p of points) {
+        await plotPointRepository.delete(p.id);
+      }
+      await plotLineRepository.delete(plotLine.id);
       onDeleted?.(plotLine.id);
       onClose();
     } catch (err) {

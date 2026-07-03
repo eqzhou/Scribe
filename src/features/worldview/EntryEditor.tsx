@@ -10,16 +10,15 @@
  * - 删除：复用 useDeleteWithImpact Hook + EditModalFooter 通用底部操作区与确认弹窗
  */
 import { useEffect, useState, useCallback } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { SceneDivider } from '../editor/nodes/SceneDivider';
-import { db } from '../../lib/db';
 import {
   worldviewRepository,
   characterRepository,
   sceneRepository,
 } from '../../lib/repositories';
+import { useApiQuery } from '../../hooks/useApiQuery';
 import { syncWorldviewRelations } from '../../lib/relationSync';
 import { useDeleteWithImpact } from '../../hooks/useDeleteWithImpact';
 import type {
@@ -117,16 +116,14 @@ export function EntryEditor({
     useDeleteWithImpact();
 
   // 实时监听当前作品的角色与场景，供关联选择
-  const characters = useLiveQuery(
-    () => db.characters.where('bookId').equals(bookId).toArray(),
+  const characters = useApiQuery<Character[]>(
+    async () => characterRepository.list(bookId),
     [bookId],
-    [] as Character[],
-  );
-  const scenes = useLiveQuery(
-    () => db.scenes.where('bookId').equals(bookId).toArray(),
+  ) ?? [];
+  const scenes = useApiQuery<Scene[]>(
+    async () => sceneRepository.list(bookId),
     [bookId],
-    [] as Scene[],
-  );
+  ) ?? [];
 
   // 弹窗打开或编辑目标变化时同步表单与编辑器内容
   useEffect(() => {
@@ -232,44 +229,36 @@ export function EntryEditor({
     if (!entry) return;
     setDeleting(true);
     try {
-      await db.transaction(
-        'rw',
-        [db.worldview, db.characters, db.scenes],
-        async () => {
-          // 1. 清理角色反向引用
-          if (entry.relatedCharacterIds.length > 0) {
-            const linkedChars = await db.characters
-              .where('id')
-              .anyOf(entry.relatedCharacterIds)
-              .toArray();
-            for (const c of linkedChars) {
-              const next = (c.relatedWorldviewIds ?? []).filter(
-                (id) => id !== entry.id,
-              );
-              await characterRepository.update(c.id, {
-                relatedWorldviewIds: next,
-              });
-            }
-          }
-          // 2. 清理场景反向引用
-          if (entry.relatedSceneIds.length > 0) {
-            const linkedScenes = await db.scenes
-              .where('id')
-              .anyOf(entry.relatedSceneIds)
-              .toArray();
-            for (const s of linkedScenes) {
-              const next = s.worldviewEntryIds.filter(
-                (id) => id !== entry.id,
-              );
-              await sceneRepository.update(s.id, {
-                worldviewEntryIds: next,
-              });
-            }
-          }
-          // 3. 删除条目本身
-          await worldviewRepository.delete(entry.id);
-        },
-      );
+      // 1. 清理角色反向引用
+      if (entry.relatedCharacterIds.length > 0) {
+        const linkedChars = await characterRepository.listByIds(
+          entry.relatedCharacterIds,
+        );
+        for (const c of linkedChars) {
+          const next = (c.relatedWorldviewIds ?? []).filter(
+            (id) => id !== entry.id,
+          );
+          await characterRepository.update(c.id, {
+            relatedWorldviewIds: next,
+          });
+        }
+      }
+      // 2. 清理场景反向引用
+      if (entry.relatedSceneIds.length > 0) {
+        const linkedScenes = await sceneRepository.listByIds(
+          entry.relatedSceneIds,
+        );
+        for (const s of linkedScenes) {
+          const next = s.worldviewEntryIds.filter(
+            (id) => id !== entry.id,
+          );
+          await sceneRepository.update(s.id, {
+            worldviewEntryIds: next,
+          });
+        }
+      }
+      // 3. 删除条目本身
+      await worldviewRepository.delete(entry.id);
       onDeleted?.(entry.id);
       onClose();
     } catch (err) {

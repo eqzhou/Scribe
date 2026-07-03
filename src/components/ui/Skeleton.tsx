@@ -1,7 +1,7 @@
 /**
  * Skeleton 骨架屏
  *
- * 用于 useLiveQuery 加载态的占位渲染，替代纯文本「加载中…」。
+ * 用于数据加载态的占位渲染，替代纯文本「加载中…」。
  * 采用 shimmer 微光扫描动画（背景渐变滑动），尊重 prefers-reduced-motion。
  *
  * 设计：

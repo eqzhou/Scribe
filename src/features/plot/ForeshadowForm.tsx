@@ -16,10 +16,9 @@
  * 故将废弃理由以「【废弃理由】xxx\n\n」前缀写入 description，编辑时解析回填。
  */
 import { useEffect, useMemo, useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Trash2, XCircle, RotateCcw } from 'lucide-react';
-import { db } from '../../lib/db';
-import { foreshadowingRepository } from '../../lib/repositories';
+import { chapterRepository, foreshadowingRepository } from '../../lib/repositories';
+import { useApiQuery } from '../../hooks/useApiQuery';
 import type { Chapter, Foreshadowing, ForeshadowStatus } from '../../types';
 import { cn } from '../../utils/cn';
 import { Modal, Button, Input, Textarea, ConfirmDialog } from '../../components/ui';
@@ -133,12 +132,11 @@ export function ForeshadowForm({
 
   const isEditing = Boolean(foreshadowing);
 
-  // 实时监听当前作品的章节列表（按 order 升序），供埋设/回收章节选择
-  const chapters = useLiveQuery(
-    async () => db.chapters.where('bookId').equals(bookId).sortBy('order'),
+  // 实时拉取当前作品的章节列表（chapterRepository.list 已按 order 升序），供埋设/回收章节选择
+  const chapters = useApiQuery<Chapter[]>(
+    async () => (bookId ? chapterRepository.list(bookId) : []),
     [bookId],
-    [] as Chapter[],
-  );
+  ) ?? [];
 
   // 弹窗打开或目标变化时同步表单
   useEffect(() => {
@@ -170,8 +168,8 @@ export function ForeshadowForm({
   /** 选择回收章节时校验：不能早于埋设章节 */
   const handlePayoffChange = (value: string): void => {
     if (value && form.setupChapterId) {
-      const setupOrder = chapters?.find((c) => c.id === form.setupChapterId)?.order;
-      const payoffOrder = chapters?.find((c) => c.id === value)?.order;
+      const setupOrder = chapters.find((c) => c.id === form.setupChapterId)?.order;
+      const payoffOrder = chapters.find((c) => c.id === value)?.order;
       if (setupOrder != null && payoffOrder != null && payoffOrder < setupOrder) {
         setError('回收章节不应早于埋设章节');
         return;
@@ -307,7 +305,7 @@ export function ForeshadowForm({
                 className={selectCls}
               >
                 <option value="">未埋设</option>
-                {chapters?.map((c) => (
+                {chapters.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.title}
                   </option>
@@ -325,7 +323,7 @@ export function ForeshadowForm({
                 className={selectCls}
               >
                 <option value="">未回收</option>
-                {chapters?.map((c) => (
+                {chapters.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.title}
                   </option>

@@ -21,6 +21,9 @@ server/dist
 # 服务端运行时数据（模型配置含 API Key）
 server/data
 
+# 用户生成的章节文件（按 用户/作品/章节 存储）
+file
+
 # IDE 内部文件
 .trae
 

@@ -13,8 +13,7 @@
  */
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { db } from '../lib/db';
-import { chapterRepository } from '../lib/repositories';
+import { chapterRepository, volumeRepository } from '../lib/repositories';
 import { useUIStore, useBookStore, useEditorStore, useToastStore } from '../stores';
 
 /** Alt+0 切换到项目入口；Alt+1~7 切换项目内功能模块；Alt+8 打开设置 */
@@ -87,8 +86,8 @@ export function useKeyboardShortcuts() {
         }
         try {
           const [volumes, chapters] = await Promise.all([
-            db.volumes.where('bookId').equals(bookId).sortBy('order'),
-            db.chapters.where('bookId').equals(bookId).sortBy('order'),
+            volumeRepository.list(bookId),
+            chapterRepository.list(bookId),
           ]);
           const volId = volumes[0]?.id;
           const siblings = volId

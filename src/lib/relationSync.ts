@@ -4,7 +4,6 @@
  * 从 CharacterForm.syncWorldviewRelations 和 EntryEditor.syncRelations 提取。
  * 负责 character↔worldview 和 worldview↔scene 的双向引用一致性。
  */
-import { db } from './db';
 import {
   worldviewRepository,
   characterRepository,
@@ -30,25 +29,24 @@ export async function syncCharacterWorldviewRelations(
   const removed = oldIds.filter((id) => !newIds.includes(id));
   if (added.length === 0 && removed.length === 0) return;
 
-  await db.transaction('rw', db.worldview, async () => {
-    for (const id of added) {
-      const w = await db.worldview.get(id);
-      if (!w) continue;
-      const set = new Set(w.relatedCharacterIds);
-      set.add(characterId);
-      await worldviewRepository.update(id, {
-        relatedCharacterIds: Array.from(set),
-      });
-    }
-    for (const id of removed) {
-      const w = await db.worldview.get(id);
-      if (!w) continue;
-      const next = w.relatedCharacterIds.filter((x) => x !== characterId);
-      await worldviewRepository.update(id, {
-        relatedCharacterIds: next,
-      });
-    }
-  });
+  // 逐条读取并更新；后端无事务，依赖单条 PATCH 的幂等性
+  for (const id of added) {
+    const w = await worldviewRepository.get(id);
+    if (!w) continue;
+    const set = new Set(w.relatedCharacterIds);
+    set.add(characterId);
+    await worldviewRepository.update(id, {
+      relatedCharacterIds: Array.from(set),
+    });
+  }
+  for (const id of removed) {
+    const w = await worldviewRepository.get(id);
+    if (!w) continue;
+    const next = w.relatedCharacterIds.filter((x) => x !== characterId);
+    await worldviewRepository.update(id, {
+      relatedCharacterIds: next,
+    });
+  }
 }
 
 /**
@@ -75,50 +73,42 @@ export async function syncWorldviewRelations(
   const addedScenes = newSceneIds.filter((id) => !oldSceneIds.includes(id));
   const removedScenes = oldSceneIds.filter((id) => !newSceneIds.includes(id));
 
-  await db.transaction(
-    'rw',
-    [db.characters, db.scenes],
-    async () => {
-      // 角色：新增引用
-      for (const id of addedChars) {
-        const c = await db.characters.get(id);
-        if (!c) continue;
-        const set = new Set(c.relatedWorldviewIds ?? []);
-        set.add(entryId);
-        await characterRepository.update(c.id, {
-          relatedWorldviewIds: Array.from(set),
-        });
-      }
-      // 角色：移除引用
-      for (const id of removedChars) {
-        const c = await db.characters.get(id);
-        if (!c) continue;
-        const next = (c.relatedWorldviewIds ?? []).filter(
-          (x) => x !== entryId,
-        );
-        await characterRepository.update(c.id, {
-          relatedWorldviewIds: next,
-        });
-      }
-      // 场景：新增引用
-      for (const id of addedScenes) {
-        const s = await db.scenes.get(id);
-        if (!s) continue;
-        const set = new Set(s.worldviewEntryIds);
-        set.add(entryId);
-        await sceneRepository.update(s.id, {
-          worldviewEntryIds: Array.from(set),
-        });
-      }
-      // 场景：移除引用
-      for (const id of removedScenes) {
-        const s = await db.scenes.get(id);
-        if (!s) continue;
-        const next = s.worldviewEntryIds.filter((x) => x !== entryId);
-        await sceneRepository.update(s.id, {
-          worldviewEntryIds: next,
-        });
-      }
-    },
-  );
+  // 角色：新增引用
+  for (const id of addedChars) {
+    const c = await characterRepository.get(id);
+    if (!c) continue;
+    const set = new Set(c.relatedWorldviewIds ?? []);
+    set.add(entryId);
+    await characterRepository.update(c.id, {
+      relatedWorldviewIds: Array.from(set),
+    });
+  }
+  // 角色：移除引用
+  for (const id of removedChars) {
+    const c = await characterRepository.get(id);
+    if (!c) continue;
+    const next = (c.relatedWorldviewIds ?? []).filter((x) => x !== entryId);
+    await characterRepository.update(c.id, {
+      relatedWorldviewIds: next,
+    });
+  }
+  // 场景：新增引用
+  for (const id of addedScenes) {
+    const s = await sceneRepository.get(id);
+    if (!s) continue;
+    const set = new Set(s.worldviewEntryIds);
+    set.add(entryId);
+    await sceneRepository.update(s.id, {
+      worldviewEntryIds: Array.from(set),
+    });
+  }
+  // 场景：移除引用
+  for (const id of removedScenes) {
+    const s = await sceneRepository.get(id);
+    if (!s) continue;
+    const next = s.worldviewEntryIds.filter((x) => x !== entryId);
+    await sceneRepository.update(s.id, {
+      worldviewEntryIds: next,
+    });
+  }
 }

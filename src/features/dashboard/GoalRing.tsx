@@ -11,9 +11,9 @@
  */
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Flame } from 'lucide-react';
-import { db } from '../../lib/db';
+import { writingLogRepository } from '../../lib/repositories';
+import { useApiQuery } from '../../hooks/useApiQuery';
 import { useSettingStore } from '../../stores';
 import { todayDate, formatDate, getHeatmapDates } from '../../utils/date';
 import { formatWordCount } from '../../utils/wordCount';
@@ -38,24 +38,18 @@ export function GoalRing({ bookId }: GoalRingProps) {
   const dailyGoal = useSettingStore((s) => s.dailyGoal);
 
   // 实时监听当前作品的全部写作记录（用于计算今日字数与连续天数）
-  const logs = useLiveQuery(
-    async () => {
-      if (!bookId) return [];
-      return db.writingLogs.where('bookId').equals(bookId).toArray();
-    },
+  const logs = useApiQuery(
+    async () => (bookId ? writingLogRepository.list(bookId) : []),
     [bookId],
-    [],
-  );
+  ) ?? [];
 
   // 计算今日字数、进度百分比、连续写作天数
   const { todayWords, percent, streak } = useMemo(() => {
     const today = todayDate();
     // 日期 → 字数 映射
     const map = new Map<string, number>();
-    if (logs) {
-      for (const log of logs) {
-        map.set(log.date, (map.get(log.date) ?? 0) + log.wordCount);
-      }
+    for (const log of logs) {
+      map.set(log.date, (map.get(log.date) ?? 0) + log.wordCount);
     }
     const todayWords = map.get(today) ?? 0;
     const percent =

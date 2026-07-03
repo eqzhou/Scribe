@@ -151,9 +151,13 @@ export function AIModelManager() {
     abortRef.current = controller;
     const timeoutId = window.setTimeout(() => controller.abort(), 20000);
     try {
+      const token = localStorage.getItem('scribe-token') ?? '';
       const res = await fetch('/api/ai/test', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           modelConfig: {
             model: form.modelId,

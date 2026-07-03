@@ -2,7 +2,7 @@
  * 通用删除影响检测 Hook
  *
  * 从 CharacterForm / EntryEditor / ChapterTree 中提取的公共删除流程：
- * 1. 打开确认弹窗 + 调用 checkReferences 检测引用影响
+ * 1. 打开确认弹窗 + 通过 repository 预加载作品数据，再调用 checkReferences 检测引用影响
  * 2. 展示影响详情供用户确认
  * 3. 调用方执行实际删除逻辑
  *
@@ -12,6 +12,15 @@ import { useState } from 'react';
 import { checkReferences } from '../lib/referenceChecker';
 import { useToastStore } from '../stores';
 import type { ImpactInfo } from '../components/ui/ConfirmDialog';
+import {
+  chapterRepository,
+  characterRepository,
+  sceneRepository,
+  relationRepository,
+  plotPointRepository,
+  foreshadowingRepository,
+  worldviewRepository,
+} from '../lib/repositories';
 
 interface UseDeleteWithImpactResult {
   /** 删除确认弹窗是否打开 */
@@ -44,7 +53,34 @@ export function useDeleteWithImpact(): UseDeleteWithImpactResult {
     setDeleteImpact(null);
     setChecking(true);
     try {
-      const impact = await checkReferences(entityType, entityId, bookId);
+      // 并发预加载引用检测所需的全部实体数组
+      const [
+        chapters,
+        characters,
+        worldviews,
+        scenes,
+        relations,
+        plotPoints,
+        foreshadowing,
+      ] = await Promise.all([
+        chapterRepository.list(bookId),
+        characterRepository.list(bookId),
+        worldviewRepository.list(bookId),
+        sceneRepository.list(bookId),
+        relationRepository.list(bookId),
+        plotPointRepository.list(bookId),
+        foreshadowingRepository.list(bookId),
+      ]);
+
+      const impact = checkReferences(entityType, entityId, {
+        chapters,
+        characters,
+        worldviews,
+        scenes,
+        relations,
+        plotPoints,
+        foreshadowing,
+      });
       setDeleteImpact(impact);
     } catch (err) {
       // 引用检测失败时关闭弹窗并通过 toast 提示，避免 unhandled rejection

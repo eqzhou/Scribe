@@ -21,7 +21,7 @@ import {
 const router = Router();
 
 // 列出所有模型
-router.get('/', (_req: Request, res: Response) => {
+router.get('/models', (_req: Request, res: Response) => {
   res.json({
     models: listModels(),
     activeModelId: getActiveModelId(),
@@ -29,14 +29,14 @@ router.get('/', (_req: Request, res: Response) => {
 });
 
 // 获取单个模型
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/models/:id', (req: Request, res: Response) => {
   const m = getModel(req.params.id);
   if (!m) { res.status(404).json({ error: '模型不存在' }); return; }
   res.json(m);
 });
 
 // 创建模型
-router.post('/', (req: Request, res: Response) => {
+router.post('/models', (req: Request, res: Response) => {
   try {
     const body = req.body as Record<string, unknown>;
     const name = String(body.name ?? '');
@@ -69,7 +69,7 @@ router.post('/', (req: Request, res: Response) => {
 });
 
 // 更新模型
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/models/:id', (req: Request, res: Response) => {
   try {
     const body = req.body as Record<string, unknown>;
     const patch: Record<string, unknown> = {};
@@ -97,21 +97,21 @@ router.put('/:id', (req: Request, res: Response) => {
 });
 
 // 删除模型
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/models/:id', (req: Request, res: Response) => {
   const ok = deleteModel(req.params.id);
   if (!ok) { res.status(404).json({ error: '模型不存在' }); return; }
   res.json({ ok: true });
 });
 
 // 设为激活默认模型
-router.post('/:id/activate', (req: Request, res: Response) => {
+router.post('/models/:id/activate', (req: Request, res: Response) => {
   const ok = setActiveModel(req.params.id);
   if (!ok) { res.status(400).json({ error: '无法激活该模型' }); return; }
   res.json({ ok: true });
 });
 
 // 测试连通性
-router.post('/:id/test', async (req: Request, res: Response) => {
+router.post('/models/:id/test', async (req: Request, res: Response) => {
   try {
     const result = await testModel(req.params.id);
     res.json(result);

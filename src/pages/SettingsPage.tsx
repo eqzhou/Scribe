@@ -30,7 +30,7 @@ import { useSettingStore, useUIStore, useBookStore, useToastStore } from '../sto
 import type { ThemeMode, ColorTheme } from '../types';
 import { DuplicateBookError, importJson, importJsonWithMode } from '../lib/importer';
 import { exportBook, exportAll, downloadJson } from '../lib/exporter';
-import { db } from '../lib/db';
+import { bookRepository } from '../lib/repositories';
 import { cn } from '../utils/cn';
 import { Button, Modal, ConfirmDialog } from '../components/ui';
 import { AIModelManager } from '../components/settings/AIModelManager';
@@ -217,54 +217,17 @@ export default function SettingsPage() {
     setDailyGoal(clamped);
   };
 
-  /** 清除全部本地数据（不可恢复，需二次确认） */
+  /** 清除全部数据（不可恢复，需二次确认） */
   const handleClearAllData = async (): Promise<void> => {
     setClearing(true);
     try {
-      await db.transaction(
-        'rw',
-        [
-          db.books,
-          db.worldview,
-          db.characters,
-          db.relations,
-          db.plotLines,
-          db.plotPoints,
-          db.foreshadowing,
-          db.scenes,
-          db.volumes,
-          db.chapters,
-          db.inspiration,
-          db.writingLogs,
-        ],
-        async () => {
-          await Promise.all([
-            db.books.clear(),
-            db.worldview.clear(),
-            db.characters.clear(),
-            db.relations.clear(),
-            db.plotLines.clear(),
-            db.plotPoints.clear(),
-            db.foreshadowing.clear(),
-            db.scenes.clear(),
-            db.volumes.clear(),
-            db.chapters.clear(),
-            db.inspiration.clear(),
-            db.writingLogs.clear(),
-          ]);
-        },
-      );
-      // 同步清除 localStorage 中的降级备份数据
-      try {
-        const keys = Object.keys(localStorage).filter((k) =>
-          k.startsWith('scribe:fallback:chapter:'),
-        );
-        keys.forEach((k) => localStorage.removeItem(k));
-      } catch {
-        // localStorage 不可用时忽略
-      }
+      // 后端 Prisma onDelete: Cascade，删除每个作品会级联清除其下全部关联数据
+      // （worldview / characters / relations / plotLines / plotPoints /
+      //   foreshadowing / scenes / volumes / chapters / inspiration / writingLogs）
+      const books = await bookRepository.list();
+      await Promise.all(books.map((b) => bookRepository.delete(b.id)));
       await refreshBooks();
-      pushToast('success', '已清除全部本地数据');
+      pushToast('success', '已清除全部数据');
     } catch (e) {
       pushToast('error', `清除失败：${e instanceof Error ? e.message : String(e)}`);
     } finally {

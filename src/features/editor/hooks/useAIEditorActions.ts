@@ -12,7 +12,7 @@
  */
 import { useState, useRef, useEffect } from 'react';
 import type { Editor } from '@tiptap/react';
-import { db } from '../../../lib/db';
+import { bookRepository } from '../../../lib/repositories';
 import {
   executeContinue,
   executeRewrite,
@@ -63,7 +63,7 @@ async function getBookInfo(
   currentBookId: string | null,
 ): Promise<{ id: string; title: string; synopsis: string }> {
   const id = currentBookId ?? bookId;
-  const book = await db.books.get(id);
+  const book = await bookRepository.get(id);
   return {
     id,
     title: book?.title ?? '未命名作品',

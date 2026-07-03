@@ -8,8 +8,8 @@
  */
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../lib/db';
+import { chapterRepository } from '../../lib/repositories';
+import { useApiQuery } from '../../hooks/useApiQuery';
 import type { Chapter, ChapterStatus } from '../../types';
 import { getRelativeTime } from '../../utils/date';
 import { formatWordCount } from '../../utils/wordCount';
@@ -38,22 +38,20 @@ export function RecentList({ bookId }: RecentListProps) {
   const navigate = useNavigate();
 
   // 实时监听当前作品的章节，按 updatedAt 倒序取前 5
-  const chapters = useLiveQuery(
+  const chapters = useApiQuery<Chapter[]>(
     async (): Promise<Chapter[]> => {
       if (!bookId) return [];
-      const all = await db.chapters.where('bookId').equals(bookId).toArray();
+      const all = await chapterRepository.list(bookId);
       // 按 updatedAt 倒序排序后截取前 LIMIT 条
       return all
-        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
         .slice(0, LIMIT);
     },
     [bookId],
-    [],
-  );
+  ) ?? [];
 
   // 渲染条目（统一为章节类型；color 标识固定为 chapter=foreground）
   const items = useMemo(() => {
-    if (!chapters) return [];
     return chapters.map((c) => ({
       id: c.id,
       title: c.title,

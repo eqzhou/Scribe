@@ -3,7 +3,7 @@
  *
  * 由 Ctrl/Cmd+K 或顶部搜索按钮唤起（状态由 useUIStore.globalSearchOpen 管理）。
  * - 全屏遮罩 + 居中搜索面板（宽度 600px）
- * - 使用 useLiveQuery 实时查询当前作品的全部实体
+ * - 使用 useApiQuery 轮询当前作品的全部实体
  * - 输入时按标题与内容（前 100 字符）包含匹配，分模块分组展示
  * - 每组最多 5 条；点击结果跳转到对应页面并关闭面板
  * - ESC 关闭；Framer Motion 入场动效（scale 0.95→1 + opacity）
@@ -11,7 +11,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Search, CornerDownLeft } from 'lucide-react';
 import { useBookStore, useUIStore } from '../stores';
 import {
@@ -23,6 +22,7 @@ import {
   plotPointRepository,
   inspirationRepository,
 } from '../lib/repositories';
+import { useApiQuery } from '../hooks/useApiQuery';
 import { cn } from '../utils/cn';
 
 /** 单条搜索结果 */
@@ -105,9 +105,19 @@ export default function GlobalSearch() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   // 实时查询当前作品的全部实体；bookId 变化时自动重查
-  const data = useLiveQuery(
-    async (): Promise<BookEntities | null> => {
-      if (!currentBookId) return null;
+  const data = useApiQuery<BookEntities>(
+    async (): Promise<BookEntities> => {
+      if (!currentBookId) {
+        return {
+          chapters: [],
+          characters: [],
+          worldview: [],
+          scenes: [],
+          plotLines: [],
+          plotPoints: [],
+          inspiration: [],
+        };
+      }
       const [
         chapters,
         characters,

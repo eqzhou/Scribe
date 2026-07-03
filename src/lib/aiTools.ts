@@ -1,10 +1,9 @@
 /**
  * AI 写作工具：构建上下文 + 封装任务执行
  *
- * 从 Dexie DB 拉取当前作品的角色、世界观、剧情等数据，
+ * 通过 Repository 拉取当前作品的角色、世界观、剧情等数据，
  * 构造 AIContext 供 aiClient 使用。
  */
-import { db } from './db';
 import type {
   AIContext,
   OutlineItem,
@@ -58,8 +57,8 @@ export async function buildAIContext(
   synopsis: string,
 ): Promise<AIContext> {
   const [characters, worldview] = await Promise.all([
-    db.characters.where('bookId').equals(bookId).toArray(),
-    db.worldview.where('bookId').equals(bookId).toArray(),
+    characterRepository.list(bookId),
+    worldviewRepository.list(bookId),
   ]);
 
   return {
@@ -454,7 +453,7 @@ export async function executeCharacterGenerate(
   signal?: AbortSignal,
 ): Promise<CharacterGenerateResult | null> {
   // 拉取已有角色列表用于上下文
-  const existing = await db.characters.where('bookId').equals(bookId).toArray();
+  const existing = await characterRepository.list(bookId);
   return new Promise((resolve, reject) => {
     streamCharacterGenerate(
       {
@@ -493,7 +492,7 @@ export async function executeCharacterExtract(
   onProgress?: (text: string) => void,
   signal?: AbortSignal,
 ): Promise<number> {
-  const existing = await db.characters.where('bookId').equals(bookId).toArray();
+  const existing = await characterRepository.list(bookId);
   const existingNames = new Set(existing.map((c) => c.name));
   if (existing.length > 0) {
     // 把别名也加入比对集合

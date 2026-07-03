@@ -3,14 +3,14 @@
  *
  * 顶部欢迎区：大标题「角色 · 群英谱」+ 副文案。
  * 视图切换：角色列表 / 关系图谱 两个 Tab。
- * 数据：useBook 获取当前作品；useLiveQuery 监听当前作品的角色与关系。
+ * 数据：useBook 获取当前作品；useApiQuery 轮询当前作品的角色与关系。
  * 右上角「新建角色」按钮（primary 变体），两个视图下均显示。
  */
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Plus } from 'lucide-react';
-import { db } from '../lib/db';
+import { characterRepository, relationRepository } from '../lib/repositories';
+import { useApiQuery } from '../hooks/useApiQuery';
 import { useBook } from '../hooks';
 import type { Character, CharacterRelation } from '../types';
 import { cn } from '../utils/cn';
@@ -36,32 +36,32 @@ export default function CharactersPage() {
   const bookId = book?.id ?? null;
 
   // 实时监听当前作品的角色（主角优先、updatedAt 倒序）
-  const characters = useLiveQuery(async () => {
-    if (!bookId) return undefined;
-    const list = await db.characters.where('bookId').equals(bookId).toArray();
-    const roleOrder: Record<string, number> = {
-      protagonist: 0,
-      supporting: 1,
-      antagonist: 2,
-      minor: 3,
-    };
-    return list.sort((a, b) => {
-      const ra = roleOrder[a.role] ?? 9;
-      const rb = roleOrder[b.role] ?? 9;
-      if (ra !== rb) return ra - rb;
-      return b.updatedAt - a.updatedAt;
-    });
-  }, [bookId]);
-
-  // 实时监听当前作品的关系
-  const relations = useLiveQuery(
+  const charactersData = useApiQuery<Character[]>(
     async () => {
-      if (!bookId) return [] as CharacterRelation[];
-      return db.relations.where('bookId').equals(bookId).toArray();
+      if (!bookId) return [];
+      const list = await characterRepository.list(bookId);
+      const roleOrder: Record<string, number> = {
+        protagonist: 0,
+        supporting: 1,
+        antagonist: 2,
+        minor: 3,
+      };
+      return list.sort((a, b) => {
+        const ra = roleOrder[a.role] ?? 9;
+        const rb = roleOrder[b.role] ?? 9;
+        if (ra !== rb) return ra - rb;
+        return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+      });
     },
     [bookId],
-    [] as CharacterRelation[],
   );
+  const characters = charactersData;
+
+  // 实时监听当前作品的关系
+  const relations = useApiQuery<CharacterRelation[]>(
+    async () => (bookId ? relationRepository.list(bookId) : []),
+    [bookId],
+  ) ?? [];
 
   const [tab, setTab] = useState<CharactersTab>('list');
   const [formOpen, setFormOpen] = useState(false);
@@ -192,7 +192,7 @@ export default function CharactersPage() {
         // 关系图谱视图
         <RelationGraph
           characters={list}
-          relations={relations ?? []}
+          relations={relations}
           onNodeClick={handleEdit}
         />
       )}

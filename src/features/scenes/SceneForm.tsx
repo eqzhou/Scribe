@@ -8,10 +8,9 @@
  * - 删除：ConfirmDialog，显示影响范围
  */
 import { useEffect, useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Trash2 } from 'lucide-react';
-import { db } from '../../lib/db';
-import { sceneRepository } from '../../lib/repositories';
+import { sceneRepository, worldviewRepository, characterRepository, chapterRepository } from '../../lib/repositories';
+import { useApiQuery } from '../../hooks/useApiQuery';
 import { useDeleteWithImpact } from '../../hooks/useDeleteWithImpact';
 import type { Chapter, Character, Scene, WorldviewEntry } from '../../types';
 import { cn } from '../../utils/cn';
@@ -83,30 +82,18 @@ export function SceneForm({
   const isEditing = Boolean(scene);
 
   // 实时监听当前作品的世界观条目 / 角色 / 章节，用于多选
-  const worldviewEntries = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as WorldviewEntry[];
-      return db.worldview.where('bookId').equals(bookId).toArray();
-    },
+  const worldviewEntries = useApiQuery<WorldviewEntry[]>(
+    async () => (bookId ? worldviewRepository.list(bookId) : []),
     [bookId],
-    [],
-  );
-  const characters = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as Character[];
-      return db.characters.where('bookId').equals(bookId).toArray();
-    },
+  ) ?? [];
+  const characters = useApiQuery<Character[]>(
+    async () => (bookId ? characterRepository.list(bookId) : []),
     [bookId],
-    [],
-  );
-  const chapters = useLiveQuery(
-    async () => {
-      if (!bookId) return [] as Chapter[];
-      return db.chapters.where('bookId').equals(bookId).sortBy('order');
-    },
+  ) ?? [];
+  const chapters = useApiQuery<Chapter[]>(
+    async () => (bookId ? chapterRepository.list(bookId) : []),
     [bookId],
-    [],
-  );
+  ) ?? [];
 
   // 弹窗打开或目标变化时同步表单
   useEffect(() => {
@@ -256,7 +243,7 @@ export function SceneForm({
           {/* 关联角色多选 */}
           <div className="flex flex-col">
             <label className="mb-1.5 block font-serif text-sm text-foreground">关联角色</label>
-            {characters && characters.length > 0 ? (
+            {characters.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {characters.map((c) => (
                   <label key={c.id} className={multiOptionCls(form.characterIds.includes(c.id))}>
@@ -278,7 +265,7 @@ export function SceneForm({
           {/* 关联世界观多选 */}
           <div className="flex flex-col">
             <label className="mb-1.5 block font-serif text-sm text-foreground">关联世界观</label>
-            {worldviewEntries && worldviewEntries.length > 0 ? (
+            {worldviewEntries.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {worldviewEntries.map((w) => (
                   <label
@@ -303,7 +290,7 @@ export function SceneForm({
           {/* 出现章节多选 */}
           <div className="flex flex-col">
             <label className="mb-1.5 block font-serif text-sm text-foreground">出现章节</label>
-            {chapters && chapters.length > 0 ? (
+            {chapters.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {chapters.map((ch) => (
                   <label key={ch.id} className={multiOptionCls(form.chapterIds.includes(ch.id))}>
