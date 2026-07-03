@@ -21,6 +21,18 @@ router.get('/books/:bookId/inspiration', requireAuth, async (req: Request, res: 
   }
 });
 
+// 获取单个灵感
+router.get('/inspiration/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const inspiration = await inspirationRepo.get(req.userId!, req.params.id);
+    if (!inspiration) { res.status(404).json({ error: '灵感不存在' }); return; }
+    res.json(inspiration);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '获取灵感失败';
+    res.status(500).json({ error: message });
+  }
+});
+
 router.post('/books/:bookId/inspiration', requireAuth, async (req: Request, res: Response) => {
   try {
     const body = req.body as Record<string, unknown>;

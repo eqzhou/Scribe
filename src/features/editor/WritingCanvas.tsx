@@ -456,7 +456,7 @@ export function WritingCanvas({ chapter, bookId }: WritingCanvasProps) {
                 className="flex items-center gap-2 rounded border border-border bg-muted px-3 py-2 text-left transition-all hover:border-secondary hover:shadow-soft"
               >
                 <span
-                  className="flex h-7 w-7 items-center justify-center rounded-full font-brush text-xs text-white"
+                  className="flex h-7 w-7 items-center justify-center rounded-full font-sans text-xs text-white"
                   style={{ background: c.appearanceColor || '#3d4a3d' }}
                   aria-hidden="true"
                 >

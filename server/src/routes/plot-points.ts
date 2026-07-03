@@ -22,6 +22,29 @@ router.get('/books/:bookId/plot-points', requireAuth, async (req: Request, res: 
   }
 });
 
+// 按剧情线列出节点
+router.get('/plot-lines/:plotLineId/plot-points', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const list = await plotPointRepo.listByPlotLine(req.userId!, req.params.plotLineId);
+    res.json(list);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '获取剧情线节点失败';
+    res.status(500).json({ error: message });
+  }
+});
+
+// 获取单个节点
+router.get('/plot-points/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const plotPoint = await plotPointRepo.get(req.userId!, req.params.id);
+    if (!plotPoint) { res.status(404).json({ error: '节点不存在' }); return; }
+    res.json(plotPoint);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '获取节点失败';
+    res.status(500).json({ error: message });
+  }
+});
+
 router.post('/books/:bookId/plot-points', requireAuth, async (req: Request, res: Response) => {
   try {
     const body = req.body as Record<string, unknown>;

@@ -11,6 +11,10 @@ export async function listByBook(userId: string, bookId: string) {
   });
 }
 
+export async function get(userId: string, id: string) {
+  return prisma.volume.findFirst({ where: { id, userId } });
+}
+
 // 创建卷宗：自动追加到末尾（max order + 1）
 export async function create(
   userId: string,

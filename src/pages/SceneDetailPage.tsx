@@ -202,7 +202,7 @@ export default function SceneDetailPage() {
             }}
           >
             <div className="px-6 py-8">
-              <span className="font-brush text-5xl text-white/20">
+              <span className="font-serif text-5xl text-white/20">
                 {scene.name.slice(0, 1) || '景'}
               </span>
               <h2 className="mt-2 font-serif text-2xl font-bold text-white">

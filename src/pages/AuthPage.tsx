@@ -12,10 +12,10 @@
  *
  * 设计：居中卡片（约 400px）+ 朱砂红品牌色 + framer-motion 入场动画。
  */
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff, Feather } from 'lucide-react';
 import { Button, Input } from '../components/ui';
 import { useToastStore, useUserStore } from '../stores';
 import { login as apiLogin, register as apiRegister } from '../lib/authClient';
@@ -24,26 +24,56 @@ import { cn } from '../utils/cn';
 /** Tab 模式：登录 / 注册 */
 type AuthMode = 'login' | 'register';
 
+/** 记住账号的 localStorage key */
+const REMEMBER_KEY = 'scribe-remember-username';
+
 export default function AuthPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const setAuth = useUserStore((s) => s.setAuth);
   const pushToast = useToastStore((s) => s.pushToast);
 
-  const [mode, setMode] = useState<AuthMode>('login');
-  const [username, setUsername] = useState('');
+  const initialMode: AuthMode = searchParams.get('tab') === 'register' ? 'register' : 'login';
+  // 读取记住的用户名
+  const savedUsername = (() => {
+    try { return localStorage.getItem(REMEMBER_KEY) ?? ''; } catch (e) {
+      console.warn('读取记住账号失败', e);
+      return '';
+    }
+  })();
+  const [mode, setMode] = useState<AuthMode>(initialMode);
+  const [username, setUsername] = useState(savedUsername);
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(savedUsername !== '');
 
   const isRegister = mode === 'register';
 
-  /** 切换 Tab：清空错误与表单敏感字段 */
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'register' || tab === 'login') {
+      setMode(tab);
+      setError(null);
+    }
+  }, [searchParams]);
+
+  /** 切换 Tab：清空错误与表单敏感字段，同步 URL 参数 */
   const switchMode = (next: AuthMode) => {
     if (next === mode) return;
     setMode(next);
     setError(null);
     setPassword('');
+    setShowPassword(false);
+    const params = new URLSearchParams(searchParams);
+    if (next === 'register') {
+      params.set('tab', 'register');
+    } else {
+      params.delete('tab');
+    }
+    navigate(`/login?${params.toString()}`, { replace: true });
   };
 
   /** 提交表单 */
@@ -71,6 +101,17 @@ export default function AuthPage() {
         ? await apiRegister(username.trim(), password, displayName.trim() || undefined)
         : await apiLogin(username.trim(), password);
       setAuth(res.token, res.user);
+
+      // 记住账号：仅登录模式且勾选时保存用户名（不存密码）
+      if (!isRegister) {
+        try {
+          if (rememberMe) localStorage.setItem(REMEMBER_KEY, username.trim());
+          else localStorage.removeItem(REMEMBER_KEY);
+        } catch (e) {
+          console.warn('保存记住账号失败', e);
+        }
+      }
+
       pushToast('success', isRegister ? '注册成功，欢迎加入 Scribe' : '登录成功');
       navigate('/editor', { replace: true });
     } catch (err) {
@@ -114,12 +155,12 @@ export default function AuthPage() {
           <div
             className={cn(
               'mb-3 flex h-12 w-12 items-center justify-center rounded-xl',
-              'border border-secondary/40 bg-secondary/10 font-brush text-2xl text-primary',
+              'border border-secondary/40 bg-secondary/10 text-primary',
               'shadow-soft',
             )}
             aria-hidden="true"
           >
-            墨
+            <Feather className="h-5 w-5" />
           </div>
           <h1 className="font-serif text-2xl font-bold tracking-widest text-foreground">
             Scribe
@@ -183,13 +224,39 @@ export default function AuthPage() {
 
           <Input
             label="密码"
-            type="password"
+            type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="至少 6 位"
             autoComplete={isRegister ? 'new-password' : 'current-password'}
             disabled={submitting}
+            suffix={
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="p-1 rounded hover:text-foreground transition-colors"
+                tabIndex={-1}
+                aria-label={showPassword ? '隐藏密码' : '显示密码'}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            }
           />
+
+          {/* 记住账号：仅登录模式显示 */}
+          {!isRegister && (
+            <label className="flex cursor-pointer items-center gap-2 select-none">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-border accent-primary"
+              />
+              <span className="font-sans text-[12.5px] text-muted-foreground">
+                记住账号
+              </span>
+            </label>
+          )}
 
           {/* 错误提示 */}
           {error && (

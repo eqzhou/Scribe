@@ -21,6 +21,18 @@ router.get('/books/:bookId/worldview', requireAuth, async (req: Request, res: Re
   }
 });
 
+// 获取单个世界观条目
+router.get('/worldview/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const entry = await worldviewRepo.get(req.userId!, req.params.id);
+    if (!entry) { res.status(404).json({ error: '世界观条目不存在' }); return; }
+    res.json(entry);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '获取世界观条目失败';
+    res.status(500).json({ error: message });
+  }
+});
+
 router.post('/books/:bookId/worldview', requireAuth, async (req: Request, res: Response) => {
   try {
     const body = req.body as Record<string, unknown>;

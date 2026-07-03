@@ -7,10 +7,10 @@
  * - 中间：页面标题（useLocation 解析路由，§ 前缀装饰）
  * - 右侧：搜索框（Ctrl+K 唤起）、导出按钮、主题切换、设置头像
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Search, Download, Sun, Moon, Settings, ChevronDown, LogOut } from 'lucide-react';
+import { Search, Download, Sun, Moon, Settings, ChevronDown, LogOut, Feather, Library } from 'lucide-react';
 import { useBookStore, useUIStore, useToastStore, useUserStore } from '../../stores';
 import type { ThemeMode } from '../../types';
 import { exportBook, downloadJson } from '../../lib/exporter';
@@ -61,8 +61,23 @@ export default function Topbar() {
   const logout = useUserStore((s) => s.logout);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  // 用户菜单下拉
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   // 下拉菜单键盘导航：当前高亮项索引
   const [highlightedIdx, setHighlightedIdx] = useState(-1);
+
+  // 点击外部关闭用户菜单
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [userMenuOpen]);
 
   // 打开下拉时将高亮项初始化到当前选中作品
   useEffect(() => {
@@ -119,11 +134,11 @@ export default function Topbar() {
       {/* 品牌图标：点击回到首页 */}
       <a
         href="/"
-        className="group flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-secondary/40 bg-secondary/10 font-brush text-lg text-primary transition-all duration-200 hover:border-primary hover:bg-primary/15 hover:shadow-soft"
+        className="group flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-secondary/40 bg-secondary/10 text-primary transition-all duration-200 hover:border-primary hover:bg-primary/15 hover:shadow-soft"
         title="返回首页"
         aria-label="返回首页"
       >
-        墨
+        <Feather className="h-4 w-4" />
       </a>
 
       {/* 左侧：作品切换器 */}
@@ -312,53 +327,119 @@ export default function Topbar() {
           )}
         </button>
 
-        {/* 设置按钮 */}
-        <button
-          type="button"
-          title="设置"
-          aria-label="打开设置"
-          onClick={() => navigate('/settings')}
-          className={cn(
-            'flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-muted/30',
-            'text-muted-foreground transition-all duration-200 shadow-sm active:scale-95',
-            'hover:border-primary hover:bg-primary/5 hover:text-primary',
-          )}
-        >
-          <Settings className="h-4 w-4" aria-hidden="true" />
-        </button>
-
-        {/* 用户名分隔条 */}
+        {/* 用户头像 + 下拉菜单（设置 / 退出） */}
         {user && (
-          <span
-            className="hidden sm:flex items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-2.5 py-1.5"
-            title={user.username}
-          >
-            <span
-              className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 font-sans text-[11px] font-semibold text-primary"
-              aria-hidden="true"
+          <div ref={userMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setUserMenuOpen((v) => !v)}
+              title={user.username}
+              aria-label="用户菜单"
+              aria-haspopup="menu"
+              aria-expanded={userMenuOpen}
+              className={cn(
+                'flex items-center gap-2 rounded-full border border-border/60 bg-muted/30 py-1 pl-1 pr-2.5',
+                'transition-all duration-200 hover:border-primary hover:bg-primary/5',
+              )}
             >
-              {(user.displayName || user.username).slice(0, 1).toUpperCase()}
-            </span>
-            <span className="max-w-[100px] truncate font-sans text-[12px] text-foreground">
-              {user.displayName || user.username}
-            </span>
-          </span>
-        )}
+              <span
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-primary font-sans text-[12px] font-semibold text-primary-foreground"
+                aria-hidden="true"
+              >
+                {(user.displayName || user.username).slice(0, 1).toUpperCase()}
+              </span>
+              <span className="max-w-[80px] truncate font-sans text-[12px] text-foreground">
+                {user.displayName || user.username}
+              </span>
+              <ChevronDown
+                className={cn(
+                  'h-3 w-3 text-muted-foreground transition-transform duration-200',
+                  userMenuOpen && 'rotate-180',
+                )}
+                aria-hidden="true"
+              />
+            </button>
 
-        {/* 登出按钮 */}
-        <button
-          type="button"
-          title="登出"
-          aria-label="登出账号"
-          onClick={handleLogout}
-          className={cn(
-            'flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-muted/30',
-            'text-muted-foreground transition-all duration-200 shadow-sm active:scale-95',
-            'hover:border-destructive hover:bg-destructive/5 hover:text-destructive',
-          )}
-        >
-          <LogOut className="h-4 w-4" aria-hidden="true" />
-        </button>
+            <AnimatePresence>
+              {userMenuOpen && (
+                <motion.div
+                  role="menu"
+                  className={cn(
+                    'absolute right-0 top-full z-40 mt-2 min-w-[180px] overflow-hidden rounded-lg',
+                    'border border-border bg-background/95 backdrop-blur-md shadow-lifted p-1.5',
+                  )}
+                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                  transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  {/* 用户信息头部 */}
+                  <div className="px-3 py-2 border-b border-border/60 mb-1">
+                    <p className="font-sans text-[12px] font-medium text-foreground truncate">
+                      {user.displayName || user.username}
+                    </p>
+                    <p className="font-mono text-[10px] text-muted-foreground truncate">
+                      @{user.username}
+                    </p>
+                  </div>
+                  {/* 我的项目 */}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      navigate('/projects');
+                    }}
+                    className={cn(
+                      'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left',
+                      'text-[12.5px] text-muted-foreground transition-colors',
+                      'hover:bg-muted hover:text-foreground',
+                    )}
+                  >
+                    <Library className="h-3.5 w-3.5" aria-hidden="true" />
+                    我的项目
+                  </button>
+                  {/* 设置 */}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      navigate('/settings');
+                    }}
+                    className={cn(
+                      'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left',
+                      'text-[12.5px] text-muted-foreground transition-colors',
+                      'hover:bg-muted hover:text-foreground',
+                    )}
+                  >
+                    <Settings className="h-3.5 w-3.5" aria-hidden="true" />
+                    设置
+                  </button>
+                  {/* 分隔线 */}
+                  <div className="my-1 border-t border-border/60" />
+                  {/* 退出登录 */}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      handleLogout();
+                    }}
+                    className={cn(
+                      'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left',
+                      'text-[12.5px] text-muted-foreground transition-colors',
+                      'hover:bg-destructive/5 hover:text-destructive',
+                    )}
+                  >
+                    <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+                    退出登录
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
       </div>
     </header>
   );

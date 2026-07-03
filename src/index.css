@@ -96,14 +96,14 @@
 /* 色彩主题变量（置于 @layer 之外，避免 PostCSS 去重导致 light 规则丢失）*/
 /* ========================================================================== */
 
-/* ---------- 蓝调主题（默认，对齐落地页 Indigo 色系） ---------- */
-/* primary: Indigo 600 (#4f46e5); hover: Indigo 700 (#4338ca); deep: Indigo 800 */
+/* ---------- 蓝调主题（默认） ---------- */
+/* primary: Blue 600 (#2563eb); hover: Blue 700 (#1d4ed8); deep: Blue 800 */
 
 :root,
 .theme-blue {
-  --primary: 239 84% 67%;           /* Indigo 600 (#6366f1) - 更亮更饱和 */
+  --primary: 221 83% 53%;           /* Blue 600 (#2563eb) */
   --primary-foreground: 0 0% 100%;  /* #ffffff */
-  --primary-deep: 239 84% 57%;      /* Indigo 700 (#4f46e5) */
+  --primary-deep: 221 83% 43%;      /* Blue 700 (#1d4ed8) */
 
   --secondary: 210 40% 96%;         /* Slate 100 */
   --secondary-foreground: 222 47% 11%; /* Slate 900 */
@@ -114,16 +114,16 @@
   --destructive: 0 84% 60%;         /* Red 500 */
   --destructive-foreground: 0 0% 100%;
 
-  --ring: 239 84% 67%;              /* 同 primary */
+  --ring: 221 83% 53%;              /* 同 primary */
 
   --moss: 160 60% 45%;              /* Emerald - 状态指示 */
   --gold: 38 75% 50%;               /* Amber - 强调辅色 */
 }
 
 .theme-blue.theme-dark {
-  --primary: 239 84% 78%;           /* Indigo 400 (#818cf8) */
+  --primary: 213 94% 66%;           /* Blue 400 (#60a5fa) */
   --primary-foreground: 0 0% 100%;
-  --primary-deep: 239 84% 68%;      /* Indigo 500 (#6366f1) */
+  --primary-deep: 217 91% 60%;      /* Blue 500 (#3b82f6) */
 
   --secondary: 217 27% 25%;         /* Slate 700 */
   --secondary-foreground: 210 40% 98%; /* Slate 50 */
@@ -134,7 +134,7 @@
   --destructive: 0 62% 30%;         /* Red 700 */
   --destructive-foreground: 0 0% 100%;
 
-  --ring: 239 84% 78%;
+  --ring: 213 94% 66%;
 
   --moss: 160 50% 55%;
   --gold: 38 75% 58%;

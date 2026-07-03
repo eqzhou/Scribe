@@ -23,6 +23,17 @@ router.get('/books/:bookId/chapters', requireAuth, async (req: Request, res: Res
   }
 });
 
+// 按卷宗列出章节
+router.get('/volumes/:volumeId/chapters', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const list = await chapterRepo.listByVolume(req.userId!, req.params.volumeId);
+    res.json(list);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '获取卷宗章节失败';
+    res.status(500).json({ error: message });
+  }
+});
+
 router.get('/chapters/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const chapter = await chapterRepo.get(req.userId!, req.params.id);

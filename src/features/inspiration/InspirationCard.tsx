@@ -11,6 +11,7 @@
  * - 底部分隔：border-t border-border-soft
  */
 import { motion } from 'framer-motion';
+import { Quote } from 'lucide-react';
 import type { Inspiration } from '../../types';
 import { getRelativeTime } from '../../utils/date';
 import { cn } from '../../utils/cn';
@@ -40,12 +41,10 @@ export function InspirationCard({ inspiration, index, onClick }: InspirationCard
       )}
     >
       {/* 引号装饰 */}
-      <span
-        className="font-brush text-2xl leading-none text-muted-foreground select-none"
+      <Quote
+        className="h-5 w-5 shrink-0 text-muted-foreground/50 select-none"
         aria-hidden="true"
-      >
-        「
-      </span>
+      />
 
       {/* 标题 */}
       {hasTitle && (

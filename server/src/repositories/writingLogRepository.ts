@@ -9,6 +9,23 @@ export async function listByBook(userId: string, bookId: string) {
   });
 }
 
+// 列出作品在指定日期范围内的写作记录
+export async function listByDateRange(
+  userId: string,
+  bookId: string,
+  startDate: string,
+  endDate: string,
+) {
+  return prisma.writingLog.findMany({
+    where: {
+      userId,
+      bookId,
+      date: { gte: startDate, lte: endDate },
+    },
+    orderBy: { date: 'asc' },
+  });
+}
+
 // 获取当前日期字符串（YYYY-MM-DD，本地时区）
 function todayStr(): string {
   const now = new Date();

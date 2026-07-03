@@ -34,6 +34,11 @@ file
 test-screenshots
 scribe-landing-redesign
 
+# Playwright 测试产物
+test-results/
+playwright-report/
+playwright/.cache/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

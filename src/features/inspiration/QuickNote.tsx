@@ -5,7 +5,7 @@
  * 保存成功后清空所有字段；标题与内容至少一项非空才可保存。
  */
 import { useState, type KeyboardEvent } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Lightbulb } from 'lucide-react';
 import { inspirationRepository } from '../../lib/repositories';
 import { Button } from '../../components/ui';
 import { useToastStore } from '../../stores';
@@ -72,9 +72,7 @@ export function QuickNote({ bookId }: QuickNoteProps) {
       onKeyDown={handleKeyDown}
     >
       <div className="mb-3 flex items-center gap-2">
-        <span className="font-brush text-lg text-primary" aria-hidden="true">
-          灵
-        </span>
+        <Lightbulb className="h-4 w-4 text-primary" aria-hidden="true" />
         <span className="font-serif text-sm font-semibold tracking-wide text-foreground">
           速记
         </span>

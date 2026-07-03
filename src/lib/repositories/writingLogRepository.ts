@@ -24,13 +24,13 @@ function toMs(v: unknown): unknown {
 
 export const writingLogRepository: WritingLogRepository = {
   ...createApiRepository<WritingLog>({
-    entityPath: (id) => `/api/writingLogs/${id}`,
-    collectionPath: (bookId) => `/api/books/${bookId}/writingLogs`,
+    entityPath: (id) => `/api/writing-logs/${id}`,
+    collectionPath: (bookId) => `/api/books/${bookId}/writing-logs`,
   }),
 
   // 覆盖 list：默认按 bookId 列出
   async list(bookId: string): Promise<WritingLog[]> {
-    const items = await apiGet<WritingLog[]>(`/api/books/${bookId}/writingLogs`);
+    const items = await apiGet<WritingLog[]>(`/api/books/${bookId}/writing-logs`);
     return (items ?? []).map((w) => {
       const r = { ...w } as Record<string, unknown>;
       r.createdAt = toMs(r.createdAt);
@@ -44,7 +44,7 @@ export const writingLogRepository: WritingLogRepository = {
     endDate: string,
   ): Promise<WritingLog[]> {
     // date 为 YYYY-MM-DD 字符串，按字典序比较等价于按日期比较
-    const path = `/api/books/${bookId}/writingLogs?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
+    const path = `/api/books/${bookId}/writing-logs?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
     const items = await apiGet<WritingLog[]>(path);
     return (items ?? []).map((w) => {
       const r = { ...w } as Record<string, unknown>;

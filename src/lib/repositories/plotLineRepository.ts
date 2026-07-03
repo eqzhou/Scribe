@@ -14,15 +14,15 @@ export interface PlotLineRepository extends Repository<PlotLine> {
 
 export const plotLineRepository: PlotLineRepository = {
   ...createApiRepository<PlotLine>({
-    entityPath: (id) => `/api/plotLines/${id}`,
-    collectionPath: (bookId) => `/api/books/${bookId}/plotLines`,
+    entityPath: (id) => `/api/plot-lines/${id}`,
+    collectionPath: (bookId) => `/api/books/${bookId}/plot-lines`,
   }),
 
   // 覆盖 list：支持按 type 二级过滤
   async list(bookId: string, type?: PlotLineType): Promise<PlotLine[]> {
     const path = type
-      ? `/api/books/${bookId}/plotLines?type=${encodeURIComponent(type)}`
-      : `/api/books/${bookId}/plotLines`;
+      ? `/api/books/${bookId}/plot-lines?type=${encodeURIComponent(type)}`
+      : `/api/books/${bookId}/plot-lines`;
     const items = await apiGet<PlotLine[]>(path);
     return items ?? [];
   },

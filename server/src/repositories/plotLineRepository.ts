@@ -9,6 +9,10 @@ export async function listByBook(userId: string, bookId: string) {
   });
 }
 
+export async function get(userId: string, id: string) {
+  return prisma.plotLine.findFirst({ where: { id, userId } });
+}
+
 export async function create(
   userId: string,
   bookId: string,

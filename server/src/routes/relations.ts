@@ -20,6 +20,17 @@ router.get('/books/:bookId/relations', requireAuth, async (req: Request, res: Re
   }
 });
 
+// 按角色列出关系（fromId 或 toId 命中）
+router.get('/characters/:charId/relations', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const list = await relationRepo.listByCharacter(req.userId!, req.params.charId);
+    res.json(list);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '获取角色关系失败';
+    res.status(500).json({ error: message });
+  }
+});
+
 router.post('/books/:bookId/relations', requireAuth, async (req: Request, res: Response) => {
   try {
     const body = req.body as Record<string, unknown>;

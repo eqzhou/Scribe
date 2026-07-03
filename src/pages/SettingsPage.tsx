@@ -318,7 +318,7 @@ export default function SettingsPage() {
                     <span className="text-xs text-muted-foreground">
                       字 / 天
                     </span>
-                    <span className="ml-auto font-brush text-2xl text-primary" aria-hidden="true">
+                    <span className="ml-auto font-serif text-2xl tabular-nums text-primary" aria-hidden="true">
                       {dailyGoal.toLocaleString()}
                     </span>
                   </div>

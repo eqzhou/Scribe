@@ -49,7 +49,7 @@ export function CharacterList({ characters }: { characters: Character[] }) {
                 className="flex w-full items-center gap-2 px-3 py-2"
               >
                 <span
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-brush text-xs text-white"
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-sans text-xs text-white"
                   style={{ background: c.appearanceColor || '#3d4a3d' }}
                   aria-hidden="true"
                 >

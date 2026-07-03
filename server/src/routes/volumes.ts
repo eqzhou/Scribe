@@ -21,6 +21,18 @@ router.get('/books/:bookId/volumes', requireAuth, async (req: Request, res: Resp
   }
 });
 
+// 获取单个卷宗
+router.get('/volumes/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const volume = await volumeRepo.get(req.userId!, req.params.id);
+    if (!volume) { res.status(404).json({ error: '卷宗不存在' }); return; }
+    res.json(volume);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '获取卷宗失败';
+    res.status(500).json({ error: message });
+  }
+});
+
 router.post('/books/:bookId/volumes', requireAuth, async (req: Request, res: Response) => {
   try {
     const title = String(req.body?.title ?? '').trim();

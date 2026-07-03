@@ -11,7 +11,13 @@ export const router = Router();
 
 router.get('/books/:bookId/writing-logs', requireAuth, async (req: Request, res: Response) => {
   try {
-    const list = await writingLogRepo.listByBook(req.userId!, req.params.bookId);
+    const { startDate, endDate } = req.query;
+    let list;
+    if (typeof startDate === 'string' && typeof endDate === 'string') {
+      list = await writingLogRepo.listByDateRange(req.userId!, req.params.bookId, startDate, endDate);
+    } else {
+      list = await writingLogRepo.listByBook(req.userId!, req.params.bookId);
+    }
     res.json(list);
   } catch (err) {
     const message = err instanceof Error ? err.message : '获取写作记录失败';

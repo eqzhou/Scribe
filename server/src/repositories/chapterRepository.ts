@@ -21,6 +21,14 @@ export async function listByBook(userId: string, bookId: string) {
   });
 }
 
+// 获取卷宗下的章节列表
+export async function listByVolume(userId: string, volumeId: string) {
+  return prisma.chapter.findMany({
+    where: { userId, volumeId },
+    orderBy: { order: 'asc' },
+  });
+}
+
 // 内部：读取文件正文并转为 HTML，挂到 chapter.content 字段
 async function attachContent(userId: string, bookId: string, chapter: {
   id: string;

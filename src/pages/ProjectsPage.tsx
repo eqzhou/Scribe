@@ -18,7 +18,7 @@ import { Plus } from 'lucide-react';
 import { bookRepository, chapterRepository, characterRepository, worldviewRepository } from '../lib/repositories';
 import { useApiQuery } from '../hooks/useApiQuery';
 import { deleteBookCascade } from '../lib/importer';
-import { useBookStore } from '../stores';
+import { useBookStore, useToastStore } from '../stores';
 import type { Book, Chapter } from '../types';
 import { Button, ConfirmDialog, EmptyState, SkeletonGrid } from '../components/ui';
 import { BookCard } from '../features/projects/BookCard';
@@ -38,11 +38,14 @@ interface DeleteTarget {
 export default function ProjectsPage() {
   const navigate = useNavigate();
   const { currentBookId, setCurrentBook, refreshBooks, books: storeBooks } = useBookStore();
+  const pushToast = useToastStore((s) => s.pushToast);
 
   // 首次进入刷新 store（保证最新列表）
   useEffect(() => {
-    void refreshBooks();
-  }, [refreshBooks]);
+    refreshBooks().catch((e) => {
+      pushToast('error', `加载作品失败：${e instanceof Error ? e.message : String(e)}`);
+    });
+  }, [refreshBooks, pushToast]);
 
   // 实时监听作品列表（store.books 已按 updatedAt 倒序刷新）
   const books = useApiQuery<Book[]>(() => bookRepository.list(), []);
@@ -103,17 +106,24 @@ export default function ProjectsPage() {
 
   /** 表单保存成功后同步 store */
   const handleSaved = (): void => {
-    void refreshBooks();
+    refreshBooks().catch((e) => {
+      pushToast('error', `同步作品列表失败：${e instanceof Error ? e.message : String(e)}`);
+    });
   };
 
   /** 触发删除：先查询影响范围再弹出确认框 */
-  const handleDelete = async (book: Book): Promise<void> => {
-    const [chapterCount, characterCount, worldviewCount] = await Promise.all([
+  const handleDelete = (book: Book): void => {
+    Promise.all([
       chapterRepository.list(book.id).then((arr) => arr.length),
       characterRepository.list(book.id).then((arr) => arr.length),
       worldviewRepository.list(book.id).then((arr) => arr.length),
-    ]);
-    setDeleteTarget({ book, chapterCount, characterCount, worldviewCount });
+    ])
+      .then(([chapterCount, characterCount, worldviewCount]) => {
+        setDeleteTarget({ book, chapterCount, characterCount, worldviewCount });
+      })
+      .catch((e) => {
+        pushToast('error', `加载影响范围失败：${e instanceof Error ? e.message : String(e)}`);
+      });
   };
 
   /** 确认删除：级联删除作品及所有关联实体 */
@@ -125,13 +135,28 @@ export default function ProjectsPage() {
       setDeleteTarget(null);
       // 刷新 store：refreshBooks 内部会修正 currentBookId 的合法性
       await refreshBooks();
+      pushToast('success', `作品「${deleteTarget.book.title}」已删除`);
+    } catch (e) {
+      pushToast('error', `删除失败：${e instanceof Error ? e.message : String(e)}`);
+      // 失败时保留 deleteTarget 以便用户重试
     } finally {
       setDeleting(false);
     }
   };
 
-  // 加载中状态
-  const loading = list.length === 0 && books === undefined;
+  // 加载中状态：list 为空且 books 尚未返回时为 true
+  const isFetching = list.length === 0 && books === undefined;
+  // 延迟显示 Skeleton：仅当加载持续超过 300ms 才显示骨架屏，避免快速加载时闪烁
+  const [skeletonVisible, setSkeletonVisible] = useState(false);
+  useEffect(() => {
+    if (!isFetching) {
+      setSkeletonVisible(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setSkeletonVisible(true), 300);
+    return () => window.clearTimeout(timer);
+  }, [isFetching]);
+  const loading = skeletonVisible;
 
   return (
     <div className="px-8 py-6">

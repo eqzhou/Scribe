@@ -21,6 +21,18 @@ router.get('/books/:bookId/foreshadowing', requireAuth, async (req: Request, res
   }
 });
 
+// 获取单个伏笔
+router.get('/foreshadowing/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const foreshadow = await foreshadowRepo.get(req.userId!, req.params.id);
+    if (!foreshadow) { res.status(404).json({ error: '伏笔不存在' }); return; }
+    res.json(foreshadow);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '获取伏笔失败';
+    res.status(500).json({ error: message });
+  }
+});
+
 router.post('/books/:bookId/foreshadowing', requireAuth, async (req: Request, res: Response) => {
   try {
     const body = req.body as Record<string, unknown>;

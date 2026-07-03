@@ -44,6 +44,10 @@ export const useBookStore = create<BookStore>()(
       },
       getBook: (id) => get().books.find((b) => b.id === id),
     }),
-    { name: 'scribe-book' },
+    {
+      name: 'scribe-book',
+      // 仅持久化 currentBookId（UI 选择状态），不缓存 books 数组（重要内容必须从数据库读取）
+      partialize: (state) => ({ currentBookId: state.currentBookId }),
+    },
   ),
 );

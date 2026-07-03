@@ -8,7 +8,7 @@
  */
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus } from 'lucide-react';
+import { Plus, Star, GitBranch } from 'lucide-react';
 import type { PlotLine, PlotLineStatus } from '../../types';
 import { cn } from '../../utils/cn';
 import { Button, EmptyState } from '../../components/ui';
@@ -187,17 +187,13 @@ function PlotLineCard({ plotLine, onClick }: PlotLineCardProps) {
         </span>
       </div>
 
-      {/* 左侧标识区：毛笔字「主/支」+ 状态 */}
+      {/* 左侧标识区：主/支线标识 + 状态 */}
       <div className="flex w-[60px] shrink-0 flex-col items-center justify-start pt-1">
-        <span
-          className={cn(
-            'font-brush text-2xl leading-none',
-            isMain ? 'text-primary' : 'text-moss',
-          )}
-          aria-label={isMain ? '主线' : '支线'}
-        >
-          {isMain ? '主' : '支'}
-        </span>
+        {isMain ? (
+          <Star className="h-5 w-5 text-primary" aria-label="主线" />
+        ) : (
+          <GitBranch className="h-5 w-5 text-moss" aria-label="支线" />
+        )}
         <span className="mt-2 text-[11px] tracking-[1px] text-muted-foreground">
           {STATUS_LABEL[plotLine.status]}
         </span>

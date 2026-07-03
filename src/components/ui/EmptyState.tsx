@@ -9,9 +9,11 @@
  */
 import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
+import { Feather } from 'lucide-react';
 import { Button } from './Button';
 
 export interface EmptyStateProps {
+  /** 保留兼容旧调用，不再渲染字符 */
   glyph?: string;
   title: string;
   description?: string;
@@ -21,7 +23,7 @@ export interface EmptyStateProps {
 }
 
 export function EmptyState({
-  glyph,
+  glyph: _glyph,
   title,
   description,
   action,
@@ -35,14 +37,7 @@ export function EmptyState({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: 'easeOut' }}
     >
-      {glyph && (
-        <div
-          className="font-brush text-6xl text-muted-foreground leading-none mb-4"
-          aria-hidden="true"
-        >
-          {glyph}
-        </div>
-      )}
+      <Feather className="mb-4 h-10 w-10 text-muted-foreground/40" aria-hidden="true" />
       <h3 className="font-sans text-lg font-semibold text-foreground mb-2">{title}</h3>
       {description && (
         <p className="font-sans text-sm text-muted-foreground max-w-md leading-relaxed mb-6">

@@ -21,6 +21,18 @@ router.get('/books/:bookId/scenes', requireAuth, async (req: Request, res: Respo
   }
 });
 
+// 获取单个场景
+router.get('/scenes/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const scene = await sceneRepo.get(req.userId!, req.params.id);
+    if (!scene) { res.status(404).json({ error: '场景不存在' }); return; }
+    res.json(scene);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '获取场景失败';
+    res.status(500).json({ error: message });
+  }
+});
+
 router.post('/books/:bookId/scenes', requireAuth, async (req: Request, res: Response) => {
   try {
     const body = req.body as Record<string, unknown>;

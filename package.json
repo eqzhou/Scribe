@@ -16,7 +16,10 @@
     "pm2:restart": "npm run build:all && pm2 restart scribe",
     "pm2:stop": "pm2 stop scribe",
     "pm2:logs": "pm2 logs scribe",
-    "pm2:status": "pm2 status"
+    "pm2:status": "pm2 status",
+    "test": "playwright test",
+    "test:e2e": "playwright test",
+    "test:report": "playwright show-report"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -42,6 +45,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/marked": "^5.0.2",

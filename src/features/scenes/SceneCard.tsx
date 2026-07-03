@@ -67,7 +67,7 @@ export function SceneCard({ scene, onClick }: SceneCardProps) {
         }}
         aria-hidden="true"
       >
-        <span className="absolute bottom-2 left-3 font-brush text-2xl text-white/80">
+        <span className="absolute bottom-2 left-3 font-serif text-2xl text-white/80">
           {scene.name.slice(0, 1) || '景'}
         </span>
       </div>

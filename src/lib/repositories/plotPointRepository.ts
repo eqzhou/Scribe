@@ -20,18 +20,18 @@ function sortByOrder(items: PlotPoint[]): PlotPoint[] {
 
 export const plotPointRepository: PlotPointRepository = {
   ...createApiRepository<PlotPoint>({
-    entityPath: (id) => `/api/plotPoints/${id}`,
-    collectionPath: (bookId) => `/api/books/${bookId}/plotPoints`,
+    entityPath: (id) => `/api/plot-points/${id}`,
+    collectionPath: (bookId) => `/api/books/${bookId}/plot-points`,
   }),
 
   // 覆盖 list：默认按 bookId 列出
   async list(bookId: string): Promise<PlotPoint[]> {
-    const items = await apiGet<PlotPoint[]>(`/api/books/${bookId}/plotPoints`);
+    const items = await apiGet<PlotPoint[]>(`/api/books/${bookId}/plot-points`);
     return items ?? [];
   },
 
   async listByPlotLine(plotLineId: string): Promise<PlotPoint[]> {
-    const items = await apiGet<PlotPoint[]>(`/api/plotLines/${plotLineId}/plotPoints`);
+    const items = await apiGet<PlotPoint[]>(`/api/plot-lines/${plotLineId}/plot-points`);
     return sortByOrder(items ?? []);
   },
 };

@@ -21,6 +21,18 @@ router.get('/books/:bookId/characters', requireAuth, async (req: Request, res: R
   }
 });
 
+// 获取单个角色
+router.get('/characters/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const character = await characterRepo.get(req.userId!, req.params.id);
+    if (!character) { res.status(404).json({ error: '角色不存在' }); return; }
+    res.json(character);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '获取角色失败';
+    res.status(500).json({ error: message });
+  }
+});
+
 router.post('/books/:bookId/characters', requireAuth, async (req: Request, res: Response) => {
   try {
     const body = req.body as Record<string, unknown>;

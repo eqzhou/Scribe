@@ -21,6 +21,18 @@ router.get('/books/:bookId/plot-lines', requireAuth, async (req: Request, res: R
   }
 });
 
+// 获取单个剧情线
+router.get('/plot-lines/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const plotLine = await plotLineRepo.get(req.userId!, req.params.id);
+    if (!plotLine) { res.status(404).json({ error: '剧情线不存在' }); return; }
+    res.json(plotLine);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '获取剧情线失败';
+    res.status(500).json({ error: message });
+  }
+});
+
 router.post('/books/:bookId/plot-lines', requireAuth, async (req: Request, res: Response) => {
   try {
     const body = req.body as Record<string, unknown>;

@@ -18,6 +18,10 @@ export async function listByPlotLine(userId: string, plotLineId: string) {
   });
 }
 
+export async function get(userId: string, id: string) {
+  return prisma.plotPoint.findFirst({ where: { id, userId } });
+}
+
 export async function create(
   userId: string,
   bookId: string,

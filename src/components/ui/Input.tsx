@@ -19,6 +19,7 @@ export interface InputProps
   extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  suffix?: React.ReactNode;
 }
 
 export interface TextareaProps
@@ -44,7 +45,7 @@ function inputBaseCls(hasError: boolean): string {
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
-  { label, error, className, id, ...rest },
+  { label, error, className, id, suffix, ...rest },
   ref,
 ) {
   const inputId = id || rest.name || undefined;
@@ -55,13 +56,20 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           {label}
         </label>
       )}
-      <input
-        ref={ref}
-        id={inputId}
-        className={cn(inputBaseCls(Boolean(error)), className)}
-        aria-invalid={error ? true : undefined}
-        {...rest}
-      />
+      <div className="relative">
+        <input
+          ref={ref}
+          id={inputId}
+          className={cn(inputBaseCls(Boolean(error)), suffix ? 'pr-10' : '', className)}
+          aria-invalid={error ? true : undefined}
+          {...rest}
+        />
+        {suffix && (
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center text-muted-foreground">
+            {suffix}
+          </div>
+        )}
+      </div>
       {error && <p className={errorCls}>{error}</p>}
     </div>
   );
