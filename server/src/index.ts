@@ -69,6 +69,7 @@ app.use('/api', (_req, res) => {
 // __dirname 在 ESM 下需要通过 fileURLToPath 构造
 // server/dist/..  = 项目根目录，dist/ 即前端构建产物
 const STATIC_ROOT = path.resolve(__dirname, '..', '..', 'dist');
+const PUBLIC_ROOT = path.resolve(__dirname, '..', '..', 'public');
 
 // 静态资源（带 hash 的 js/css/图片等）
 app.use('/assets', express.static(path.join(STATIC_ROOT, 'assets'), {
@@ -76,8 +77,13 @@ app.use('/assets', express.static(path.join(STATIC_ROOT, 'assets'), {
   maxAge: '1y',
 }));
 
-// favicon、icons.svg 等根目录静态文件
+// favicon、icons.svg、落地页截图等根目录静态文件。
+// dist 缺少 public 拷贝时，从源码 public/ 兜底，避免源码部署后首页图片 404。
 app.use(express.static(STATIC_ROOT, {
+  maxAge: '1h',
+  index: false,
+}));
+app.use(express.static(PUBLIC_ROOT, {
   maxAge: '1h',
   index: false,
 }));
