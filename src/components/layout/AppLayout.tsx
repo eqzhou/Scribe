@@ -17,7 +17,7 @@ import GlobalSearch from '../GlobalSearch';
 import { ToastContainer } from '../feedback/Toast';
 import { Skeleton } from '../ui/Skeleton';
 import { useKeyboardShortcuts } from '../../hooks';
-import { useToastStore } from '../../stores';
+import { useToastStore, useBookStore } from '../../stores';
 
 /** 路由懒加载时的占位组件 */
 function PageLoading() {
@@ -33,6 +33,9 @@ export default function AppLayout() {
   const element = useOutlet();
   const toasts = useToastStore((s) => s.toasts);
   const dismissToast = useToastStore((s) => s.dismissToast);
+  // 当前作品 ID：纳入 motion.div key，切换作品时强制 remount 页面，
+  // 彻底清除旧项目的 useApiQuery 缓存数据与页面内部状态
+  const currentBookId = useBookStore((s) => s.currentBookId);
   // 在 Router 上下文内注册全局快捷键（Alt+1~8 / Ctrl+K / Ctrl+N）
   useKeyboardShortcuts();
   return (
@@ -43,7 +46,7 @@ export default function AppLayout() {
         <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
           <AnimatePresence mode="wait">
             <motion.div
-              key={location.pathname}
+              key={`${location.pathname}::${currentBookId ?? ''}`}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -12 }}

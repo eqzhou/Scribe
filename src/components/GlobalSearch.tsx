@@ -51,22 +51,24 @@ interface BookEntities {
   inspiration: Awaited<ReturnType<typeof inspirationRepository.list>>;
 }
 
-/** 去除 HTML 标签并压缩空白，用于内容匹配与摘要展示 */
-function stripHtml(html: string): string {
+/** 去除 HTML 标签并压缩空白，用于内容匹配与摘要展示（防御 undefined/null） */
+function stripHtml(html: string | undefined | null): string {
+  if (!html) return '';
   return html
     .replace(/<[^>]+>/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-/** 截取前 100 字符作为摘要 */
-function snippetOf(content: string): string {
+/** 截取前 100 字符作为摘要（防御 undefined/null） */
+function snippetOf(content: string | undefined | null): string {
   const text = stripHtml(content);
   return text.length > 100 ? text.slice(0, 100) + '…' : text;
 }
 
 /** HTML 实体编码：防止用户输入的 < > & " ' 被解析为 HTML 节点（XSS 防护） */
-function escapeHtml(s: string): string {
+function escapeHtml(s: string | undefined | null): string {
+  if (!s) return '';
   return s.replace(/[&<>"']/g, (c) => {
     switch (c) {
       case '&': return '&amp;';
@@ -83,7 +85,7 @@ function escapeHtml(s: string): string {
  * 安全性：先对 text 与 query 做 HTML 实体编码，再做正则替换，
  * 防止用户输入的 <script> 等被注入到 dangerouslySetInnerHTML 中。
  */
-function highlight(text: string, query: string): string {
+function highlight(text: string | undefined | null, query: string): string {
   const q = query.trim();
   const safeText = escapeHtml(text);
   if (!q) return safeText;

@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { hashPassword, verifyPassword, signToken } from '../lib/auth.js';
 import { createUser, findByUsername, findById } from '../repositories/userRepository.js';
 import { requireAuth } from '../middleware/auth.js';
+import { seedDemoData } from '../utils/seedDemoData.js';
 
 export const router = Router();
 
@@ -46,6 +47,16 @@ router.post('/register', async (req: Request, res: Response) => {
       displayName: displayName?.trim() || username,
     });
 
+    // 注册成功后注入《云隐录》示例种子数据（PRD 7.2）
+    // 失败不阻塞注册流程，仅记录错误
+    let seeded = false;
+    try {
+      await seedDemoData(user.id);
+      seeded = true;
+    } catch (err) {
+      console.error('种子数据注入失败：', err);
+    }
+
     const token = signToken(user.id);
     res.status(201).json({
       token,
@@ -54,6 +65,7 @@ router.post('/register', async (req: Request, res: Response) => {
         username: user.username,
         displayName: user.displayName,
       },
+      seeded,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : '注册失败';

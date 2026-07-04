@@ -8,6 +8,7 @@
  */
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
+import { Sparkles } from 'lucide-react';
 import {
   plotLineRepository,
   plotPointRepository,
@@ -25,10 +26,11 @@ import type {
   PlotPoint,
 } from '../types';
 import { cn } from '../utils/cn';
-import { EmptyState } from '../components/ui';
+import { EmptyState, Button } from '../components/ui';
 import { PlotLineList } from '../features/plot/PlotLineList';
 import { Timeline } from '../features/plot/Timeline';
 import { ForeshadowList } from '../features/plot/ForeshadowList';
+import { OutlineGenerator } from '../features/plot/OutlineGenerator';
 
 /** Tab 类型：剧情线 / 时间线 / 伏笔追踪 */
 type PlotTab = 'lines' | 'timeline' | 'foreshadow';
@@ -97,6 +99,7 @@ export default function PlotPage() {
 
   const [tab, setTab] = useState<PlotTab>('lines');
   const [foreshadowFilter, setForeshadowFilter] = useState<ForeshadowStatus | 'all'>('all');
+  const [outlineOpen, setOutlineOpen] = useState(false);
 
   /** 按状态筛选后的伏笔列表 */
   const filteredForeshadowing = useMemo(() => {
@@ -181,15 +184,27 @@ export default function PlotPage() {
       ) : (
         <>
           {tab === 'lines' && (
-            <PlotLineList plotLines={plotLines} bookId={bookId} />
+            <PlotLineList plotLines={plotLines} bookId={bookId} plotPoints={plotPoints} />
           )}
           {tab === 'timeline' && (
-            <Timeline
-              plotPoints={plotPoints}
-              plotLines={plotLines}
-              chapters={chapters}
-              onReorder={(reordered) => void handleTimelineReorder(reordered)}
-            />
+            <div className="flex flex-col gap-3">
+              <div className="flex justify-end">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Sparkles className="h-3.5 w-3.5" aria-hidden="true" />}
+                  onClick={() => setOutlineOpen(true)}
+                >
+                  AI 生成大纲
+                </Button>
+              </div>
+              <Timeline
+                plotPoints={plotPoints}
+                plotLines={plotLines}
+                chapters={chapters}
+                onReorder={(reordered) => void handleTimelineReorder(reordered)}
+              />
+            </div>
           )}
           {tab === 'foreshadow' && (
             <>
@@ -229,6 +244,13 @@ export default function PlotPage() {
               />
             </>
           )}
+
+          <OutlineGenerator
+            open={outlineOpen}
+            onClose={() => setOutlineOpen(false)}
+            bookId={bookId}
+            plotPoints={plotPoints}
+          />
         </>
       )}
     </div>

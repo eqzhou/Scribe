@@ -10,6 +10,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
+import { Sparkles } from 'lucide-react';
 import { worldviewRepository, characterRepository, sceneRepository } from '../lib/repositories';
 import { useApiQuery } from '../hooks/useApiQuery';
 import { useBook } from '../hooks';
@@ -20,7 +21,7 @@ import type {
   WorldviewEntry,
 } from '../types';
 import { cn } from '../utils/cn';
-import { EmptyState, SkeletonCard } from '../components/ui';
+import { Button, EmptyState, SkeletonCard } from '../components/ui';
 import {
   CategoryNav,
   type CategoryCounts,
@@ -28,6 +29,7 @@ import {
 import { EntryCard } from '../features/worldview/EntryCard';
 import { EntryEditor } from '../features/worldview/EntryEditor';
 import { WorldviewGraph } from '../features/worldview/WorldviewGraph';
+import { WorldviewGenerator } from '../features/worldview/WorldviewGenerator';
 
 type WorldviewView = 'card' | 'graph';
 
@@ -132,6 +134,7 @@ export default function WorldviewPage() {
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<WorldviewEntry | null>(null);
+  const [generatorOpen, setGeneratorOpen] = useState(false);
 
   const handleNew = (): void => {
     setEditingEntry(null);
@@ -157,13 +160,22 @@ export default function WorldviewPage() {
 
   return (
     <div className="px-8 py-6">
-      <header className="mb-6">
-      <h1 className="font-serif text-3xl font-bold tracking-wider text-foreground">
-        世界观
-      </h1>
-      <p className="mt-1.5 font-serif text-sm text-muted-foreground">
-        管理地理、历史、势力、文化等世界设定。
-      </p>
+      <header className="mb-6 flex items-start justify-between gap-4">
+      <div>
+        <h1 className="font-serif text-3xl font-bold tracking-wider text-foreground">
+          世界观
+        </h1>
+        <p className="mt-1.5 font-serif text-sm text-muted-foreground">
+          管理地理、历史、势力、文化等世界设定。
+        </p>
+      </div>
+      <Button
+        variant="secondary"
+        icon={<Sparkles className="h-4 w-4" aria-hidden="true" />}
+        onClick={() => setGeneratorOpen(true)}
+      >
+        AI 构建
+      </Button>
     </header>
 
       <div className="mb-6 flex gap-6 border-b border-border/60">
@@ -282,6 +294,16 @@ export default function WorldviewPage() {
           entry={editingEntry}
           category={active}
           bookId={bookId}
+        />
+      )}
+
+      {bookId && (
+        <WorldviewGenerator
+          open={generatorOpen}
+          onClose={() => setGeneratorOpen(false)}
+          bookId={bookId}
+          category={active}
+          existing={currentList}
         />
       )}
     </div>

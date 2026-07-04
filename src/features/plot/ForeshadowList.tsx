@@ -29,10 +29,10 @@ export interface ForeshadowListProps {
 const ABANDON_REASON_PREFIX = '【废弃理由】';
 const ABANDON_REASON_SEP = '\n\n';
 
-/** 状态 → 角标样式 */
+/** 状态 → 角标样式（planted 用朱砂红突出"未回收"警示,paidoff 用墨绿对勾） */
 const BADGE_STYLE: Record<ForeshadowStatus, string> = {
   pending: 'bg-gold/15 text-gold',
-  planted: 'bg-foreground text-background',
+  planted: 'bg-primary/15 text-primary',
   paidoff: 'bg-moss/15 text-moss',
   abandoned: 'bg-muted text-muted-foreground',
 };
@@ -204,12 +204,12 @@ function ForeshadowCard({
         isAbandoned && 'opacity-55',
       )}
     >
-      {/* 左侧状态色条 */}
+      {/* 左侧状态色条（planted 朱砂红突出未回收,paidoff 墨绿） */}
       <div
         className={cn(
           'absolute left-0 top-0 bottom-0 w-1',
           foreshadowing.status === 'pending' && 'bg-gold',
-          foreshadowing.status === 'planted' && 'bg-foreground',
+          foreshadowing.status === 'planted' && 'bg-primary',
           foreshadowing.status === 'paidoff' && 'bg-moss',
           foreshadowing.status === 'abandoned' && 'bg-muted-foreground/40',
         )}

@@ -23,7 +23,8 @@ const WORD_REGEX = /[a-zA-Z0-9]+/g;
  * @param html 富文本 HTML 字符串
  * @returns 中文字数 + 英文词数
  */
-export function countWords(html: string): number {
+export function countWords(html: string | undefined | null): number {
+  if (!html) return 0;
   // 1. 剥离 HTML 标签与常见命名实体
   const text = html
     .replace(/<[^>]+>/g, ' ')

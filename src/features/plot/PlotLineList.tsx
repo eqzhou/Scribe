@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Star, GitBranch } from 'lucide-react';
-import type { PlotLine, PlotLineStatus } from '../../types';
+import type { PlotLine, PlotLineStatus, PlotPoint } from '../../types';
 import { cn } from '../../utils/cn';
 import { Button, EmptyState } from '../../components/ui';
 import { PlotLineForm } from './PlotLineForm';
@@ -19,6 +19,8 @@ export interface PlotLineListProps {
   plotLines: PlotLine[];
   /** 当前作品 ID */
   bookId: string;
+  /** 当前作品的剧情节点列表（用于自动计算剧情线进度） */
+  plotPoints?: PlotPoint[];
 }
 
 /** 状态 → 中文标签 */
@@ -56,7 +58,7 @@ const STATUS_DOT_COLOR: Record<PlotLineStatus, string> = {
 /**
  * 剧情线列表。
  */
-export function PlotLineList({ plotLines, bookId }: PlotLineListProps) {
+export function PlotLineList({ plotLines, bookId, plotPoints = [] }: PlotLineListProps) {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<PlotLine | null>(null);
 
@@ -124,13 +126,24 @@ export function PlotLineList({ plotLines, bookId }: PlotLineListProps) {
 
       {/* 剧情线卡片列表 */}
       <ul className="flex flex-col gap-4">
-        {plotLines.map((plotLine) => (
-          <PlotLineCard
-            key={plotLine.id}
-            plotLine={plotLine}
-            onClick={() => handleEdit(plotLine)}
-          />
-        ))}
+        {plotLines.map((plotLine) => {
+          // 自动计算进度：该剧情线下的 plotPoint 中已关联章节的比例
+          const linePoints = plotPoints.filter((p) => p.plotLineId === plotLine.id);
+          const completedPoints = linePoints.filter((p) => p.chapterId).length;
+          const autoProgress = linePoints.length > 0
+            ? Math.round((completedPoints / linePoints.length) * 100)
+            : null;
+          return (
+            <PlotLineCard
+              key={plotLine.id}
+              plotLine={plotLine}
+              autoProgress={autoProgress}
+              pointCount={linePoints.length}
+              completedPoints={completedPoints}
+              onClick={() => handleEdit(plotLine)}
+            />
+          );
+        })}
       </ul>
 
       {/* 编辑表单 */}
@@ -148,12 +161,19 @@ export function PlotLineList({ plotLines, bookId }: PlotLineListProps) {
 /** 单条剧情线卡片 */
 interface PlotLineCardProps {
   plotLine: PlotLine;
+  /** 自动计算的进度（基于 plotPoint 关联章节的比例），无节点时为 null */
+  autoProgress: number | null;
+  /** 该剧情线下的剧情节点总数 */
+  pointCount: number;
+  /** 已关联章节的剧情节点数 */
+  completedPoints: number;
   onClick: () => void;
 }
 
-function PlotLineCard({ plotLine, onClick }: PlotLineCardProps) {
+function PlotLineCard({ plotLine, autoProgress, pointCount, completedPoints, onClick }: PlotLineCardProps) {
   const isMain = plotLine.type === 'main';
-  const progress = STATUS_PROGRESS[plotLine.status];
+  // 优先使用自动计算的进度，无节点时回退到状态映射
+  const progress = autoProgress ?? STATUS_PROGRESS[plotLine.status];
   const barColor = STATUS_BAR_COLOR[plotLine.status];
   const dotColor = STATUS_DOT_COLOR[plotLine.status];
 
@@ -225,7 +245,7 @@ function PlotLineCard({ plotLine, onClick }: PlotLineCardProps) {
           </p>
         )}
 
-        {/* 进度条 + 百分比 */}
+        {/* 进度条 + 百分比 + 节点统计 */}
         <div className="mt-3 flex items-center gap-3">
           <div className="h-[5px] flex-1 overflow-hidden rounded-full bg-muted">
             <motion.div
@@ -238,6 +258,11 @@ function PlotLineCard({ plotLine, onClick }: PlotLineCardProps) {
           <span className="font-mono text-[11px] text-muted-foreground">
             {progress}%
           </span>
+          {pointCount > 0 && (
+            <span className="font-sans text-[11px] text-muted-foreground">
+              · {completedPoints}/{pointCount} 节点
+            </span>
+          )}
         </div>
       </div>
     </motion.li>

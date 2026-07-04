@@ -187,7 +187,7 @@ export function WritingCanvas({ chapter, bookId }: WritingCanvasProps) {
     };
   }, [outlineText, chapter.id, chapter.outline]);
 
-  // 编辑器快捷键：Ctrl/Cmd+S 立即保存，Ctrl/Cmd+Shift+K 插入引文块
+  // 编辑器快捷键：Ctrl/Cmd+S 立即保存，Ctrl/Cmd+Shift+K 插入引文块，Ctrl/Cmd+Enter 插入场景分隔符
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const meta = e.metaKey || e.ctrlKey;
@@ -203,6 +203,12 @@ export function WritingCanvas({ chapter, bookId }: WritingCanvasProps) {
       if (key === 'k' && e.shiftKey && !e.altKey) {
         e.preventDefault();
         editor?.chain().focus().toggleBlockquote().run();
+        return;
+      }
+      // Ctrl/Cmd+Enter：插入场景分隔符 §
+      if (e.key === 'Enter' && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        editor?.chain().focus().insertContent({ type: 'sceneDivider' }).run();
         return;
       }
     };

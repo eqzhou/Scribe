@@ -46,9 +46,13 @@ export default function EditorPage() {
     [currentChapterId],
   ) ?? null;
 
-  // 无 currentChapterId 且有章节时，默认选第一章
+  // 章节选择修正：
+  // - 无 currentChapterId 时默认选第一章
+  // - currentChapterId 指向已删除章节时回退到第一章（避免永久卡在加载态）
   useEffect(() => {
-    if (!currentChapterId && chapters.length > 0) {
+    if (chapters.length === 0) return;
+    const exists = chapters.some((c) => c.id === currentChapterId);
+    if (!exists) {
       setCurrentChapter(chapters[0].id);
     }
   }, [currentChapterId, chapters, setCurrentChapter]);

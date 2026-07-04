@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { streamChat, chat, validateBaseUrl } from '../services/aiService.js';
+import { buildChatCompletionsUrl, streamChat, chat, validateBaseUrl } from '../services/aiService.js';
 import type { ModelConfig } from '../services/aiService.js';
 import { getActiveModel } from '../services/modelStore.js';
 import {
@@ -20,12 +20,12 @@ import {
 export const router = Router();
 
 /**
- * 解析后端激活的模型配置。
+ * 解析当前用户激活的模型配置。
  * 不再接受前端传入 modelConfig，统一使用后端激活模型。
  * 未配置则抛错，由调用方 catch 后返回明确错误给用户。
  */
-function resolveActiveModelConfig(): Partial<ModelConfig> {
-  const active = getActiveModel();
+async function resolveActiveModelConfig(userId: string): Promise<Partial<ModelConfig>> {
+  const active = await getActiveModel(userId);
   if (active && active.modelId && active.baseUrl) {
     return {
       model: active.modelId,
@@ -39,8 +39,8 @@ function resolveActiveModelConfig(): Partial<ModelConfig> {
 }
 
 // 健康检查（无需 API Key，仅验证服务在线）
-router.get('/health', (_req: Request, res: Response) => {
-  const active = getActiveModel();
+router.get('/health', async (req: Request, res: Response) => {
+  const active = await getActiveModel(req.userId!);
   let activeInfo: Record<string, unknown> | null = null;
   if (active) {
     activeInfo = {
@@ -93,8 +93,9 @@ function handleStreamError(res: Response, err: unknown): void {
 async function streamToResponse(
   res: Response,
   messages: ChatMessage[],
+  userId: string,
 ): Promise<void> {
-  const modelConfig = resolveActiveModelConfig();
+  const modelConfig = await resolveActiveModelConfig(userId);
   let headersSent = false;
   for await (const chunk of streamChat(messages, undefined, modelConfig)) {
     if (!headersSent) {
@@ -133,7 +134,7 @@ function createStreamRoute<TBody>(
         }
       }
       const messages = buildMessages(body);
-      await streamToResponse(res, messages);
+      await streamToResponse(res, messages, req.userId!);
     } catch (err) {
       handleStreamError(res, err);
     }
@@ -213,7 +214,7 @@ router.post('/test', async (req: Request, res: Response) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
     try {
-      const r = await fetch(`${modelConfig.baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      const r = await fetch(buildChatCompletionsUrl(modelConfig.baseUrl), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -261,7 +262,7 @@ router.post('/outline', async (req: Request, res: Response) => {
         .json({ error: '缺少必填字段 plotPoints/chapterCount', code: '400' });
       return;
     }
-    const modelConfig = resolveActiveModelConfig();
+    const modelConfig = await resolveActiveModelConfig(req.userId!);
     const messages = buildOutlineMessages(
       plotPoints,
       characters ?? [],
@@ -305,7 +306,7 @@ function createJsonRoute<TBody>(
         }
       }
       const messages = buildMessages(body);
-      const modelConfig = resolveActiveModelConfig();
+      const modelConfig = await resolveActiveModelConfig(req.userId!);
       const full = await chat(messages, { temperature: 0.8 }, modelConfig);
       setSSEHeaders(res);
       const SEGMENT_SIZE = 512;

@@ -114,6 +114,10 @@ function resolveConfig(
   return { apiKey, baseUrl, model, temperature, maxTokens };
 }
 
+export function buildChatCompletionsUrl(baseUrl: string): string {
+  return `${baseUrl.replace(/\/+$/, '')}/chat/completions`;
+}
+
 // 构造带状态码的错误
 function createApiError(status: number, body: string): Error & { statusCode: number } {
   const err = new Error(`OpenAI API 错误 (${status}): ${body}`) as Error & {
@@ -143,7 +147,7 @@ export async function* streamChat(
     max_tokens: maxTokens,
   };
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+  const response = await fetch(buildChatCompletionsUrl(baseUrl), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -212,7 +216,7 @@ export async function chat(
     max_tokens: maxTokens,
   };
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+  const response = await fetch(buildChatCompletionsUrl(baseUrl), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

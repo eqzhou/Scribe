@@ -8,7 +8,7 @@
  */
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus } from 'lucide-react';
+import { Plus, MessageSquare } from 'lucide-react';
 import { characterRepository, relationRepository } from '../lib/repositories';
 import { useApiQuery } from '../hooks/useApiQuery';
 import { useBook } from '../hooks';
@@ -18,6 +18,7 @@ import { Button, EmptyState, SkeletonGrid } from '../components/ui';
 import { CharacterCard } from '../features/characters/CharacterCard';
 import { CharacterForm } from '../features/characters/CharacterForm';
 import { RelationGraph } from '../features/characters/RelationGraph';
+import { DialogueGenerator } from '../features/characters/DialogueGenerator';
 
 /** Tab 类型：角色列表 / 关系图谱 */
 type CharactersTab = 'list' | 'graph';
@@ -66,6 +67,7 @@ export default function CharactersPage() {
   const [tab, setTab] = useState<CharactersTab>('list');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Character | null>(null);
+  const [dialogueOpen, setDialogueOpen] = useState(false);
 
   /** 打开新建表单 */
   const handleNew = (): void => {
@@ -85,6 +87,11 @@ export default function CharactersPage() {
     setEditing(null);
   };
 
+  /** 打开 AI 对话生成器 */
+  const handleOpenDialogue = (): void => {
+    setDialogueOpen(true);
+  };
+
   const list = characters ?? [];
   const loading = characters === undefined;
   const isEmpty = !loading && list.length === 0;
@@ -102,16 +109,27 @@ export default function CharactersPage() {
           </p>
         </div>
 
-        {/* 新建角色按钮（右上角，两个视图均显示） */}
-        <Button
-          variant="primary"
-          size="md"
-          icon={<Plus className="h-4 w-4" aria-hidden="true" />}
-          onClick={handleNew}
-          disabled={!bookId}
-        >
-          新建角色
-        </Button>
+        {/* 操作按钮（右上角，两个视图均显示） */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="md"
+            icon={<MessageSquare className="h-4 w-4" aria-hidden="true" />}
+            onClick={handleOpenDialogue}
+            disabled={!bookId || list.length === 0}
+          >
+            AI 对话
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
+            icon={<Plus className="h-4 w-4" aria-hidden="true" />}
+            onClick={handleNew}
+            disabled={!bookId}
+          >
+            新建角色
+          </Button>
+        </div>
       </header>
 
       {/* Tab 切换 */}
@@ -203,6 +221,16 @@ export default function CharactersPage() {
           open={formOpen}
           onClose={handleClose}
           character={editing}
+          bookId={bookId}
+        />
+      )}
+
+      {/* AI 角色对话生成器 */}
+      {bookId && (
+        <DialogueGenerator
+          open={dialogueOpen}
+          onClose={() => setDialogueOpen(false)}
+          characters={list}
           bookId={bookId}
         />
       )}

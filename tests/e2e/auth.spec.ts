@@ -18,7 +18,7 @@ function uniqueUsername(prefix = 'e2e'): string {
 
 test.describe('认证流程', () => {
   test('落地页右上角显示登录与注册按钮', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
 
     // 导航栏中的登录按钮存在且指向 /login
     const loginLink = page.locator('nav a[href="/login"]').first();
@@ -32,7 +32,7 @@ test.describe('认证流程', () => {
   });
 
   test('URL ?tab=register 直接进入注册表单', async ({ page }) => {
-    await page.goto('/login?tab=register');
+    await page.goto('/login?tab=register', { waitUntil: 'domcontentloaded' });
 
     // 注册 Tab 应为激活态
     const registerTab = page.locator('button[role="tab"]:has-text("注册")');
@@ -47,7 +47,8 @@ test.describe('认证流程', () => {
     const password = 'test123456';
 
     // 1. 注册
-    await page.goto('/login?tab=register');
+    await page.goto('/login?tab=register', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('input[placeholder="字母 / 数字 / 下划线"]')).toBeVisible();
     await page.fill('input[placeholder="字母 / 数字 / 下划线"]', username);
     await page.fill('input[placeholder="至少 6 位"]', password);
     await page.click('button[type="submit"]');
@@ -74,7 +75,8 @@ test.describe('认证流程', () => {
     const password = 'test123456';
 
     // 第一次注册成功
-    await page.goto('/login?tab=register');
+    await page.goto('/login?tab=register', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('input[placeholder="字母 / 数字 / 下划线"]')).toBeVisible();
     await page.fill('input[placeholder="字母 / 数字 / 下划线"]', username);
     await page.fill('input[placeholder="至少 6 位"]', password);
     await page.click('button[type="submit"]');
@@ -84,7 +86,8 @@ test.describe('认证流程', () => {
     await page.evaluate(() => localStorage.removeItem('scribe-token'));
 
     // 第二次注册同名用户应报错
-    await page.goto('/login?tab=register');
+    await page.goto('/login?tab=register', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('input[placeholder="字母 / 数字 / 下划线"]')).toBeVisible();
     await page.fill('input[placeholder="字母 / 数字 / 下划线"]', username);
     await page.fill('input[placeholder="至少 6 位"]', password);
     await page.click('button[type="submit"]');
@@ -95,7 +98,7 @@ test.describe('认证流程', () => {
   });
 
   test('密码显示/隐藏切换功能', async ({ page }) => {
-    await page.goto('/login');
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
 
     const passwordInput = page.locator('input[placeholder="至少 6 位"]');
     await passwordInput.fill('secret123');
@@ -114,7 +117,8 @@ test.describe('认证流程', () => {
 
   test('未认证访问受保护页面跳转登录', async ({ page }) => {
     // 确保无 token
-    await page.goto('/login');
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('input[placeholder="字母 / 数字 / 下划线"]')).toBeVisible();
     await page.evaluate(() => localStorage.removeItem('scribe-token'));
 
     // 访问编辑器应被重定向

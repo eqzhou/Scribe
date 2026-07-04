@@ -36,6 +36,33 @@ model User {
   relations    CharacterRelation[]
   inspiration  Inspiration[]
   writingLogs  WritingLog[]
+  aiModels     AIModel[]
+}
+
+// ============================================================
+// AI 大模型配置（按用户隔离）
+// ============================================================
+
+model AIModel {
+  id           String   @id @default(cuid())
+  userId       String
+  name         String
+  provider     String   @default("custom")
+  modelId      String
+  apiKey       String   @default("")
+  baseUrl      String
+  enabled      Boolean  @default(true)
+  isDefault    Boolean  @default(false)
+  temperature  Float    @default(0.7)
+  maxTokens    Int      @default(4096)
+  capabilities String[] @default([])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@unique([userId, name])
 }
 
 // ============================================================

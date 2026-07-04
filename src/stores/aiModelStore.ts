@@ -195,7 +195,10 @@ export const useAIModelStore = create<AIModelStore>((set, get) => ({
       capabilities: model.capabilities?.length ? model.capabilities : ALL_CAPABILITIES,
     };
     const created = normalizeModel(await apiPost<Record<string, unknown>>(API_BASE, body));
-    const next = [...get().models, created];
+    const next = [
+      ...get().models.map((m) => (created.isDefault ? { ...m, isDefault: false } : m)),
+      created,
+    ];
     set({ models: next });
     if (created.isDefault || next.length === 1) {
       get().setActiveModel(created.id);
@@ -216,21 +219,20 @@ export const useAIModelStore = create<AIModelStore>((set, get) => ({
     if (patch.capabilities !== undefined) body.capabilities = patch.capabilities;
 
     const updated = normalizeModel(await apiPut<Record<string, unknown>>(`${API_BASE}/${id}`, body));
-    const next = get().models.map((m) => (m.id === id ? updated : m));
-    set({ models: next });
+    const next = get().models.map((m) => {
+      if (m.id === id) return updated;
+      if (updated.isDefault) return { ...m, isDefault: false };
+      return m;
+    });
+    set({
+      models: next,
+      activeModelId: updated.isDefault ? updated.id : get().activeModelId,
+    });
   },
 
   deleteModel: async (id) => {
     await apiDelete(`${API_BASE}/${id}`);
-    const next = get().models.filter((m) => m.id !== id);
-    // 删除的是当前激活模型时，切换到剩余的默认模型
-    const { activeModelId } = get();
-    if (activeModelId === id) {
-      const newDefault = next.find((m) => m.isDefault) ?? next[0];
-      set({ models: next, activeModelId: newDefault?.id ?? null });
-    } else {
-      set({ models: next });
-    }
+    await get().fetchModels();
   },
 
   toggleEnabled: async (id) => {

@@ -11,12 +11,13 @@
  * 保存时调用 bookRepository.create 或 update，并触发 onSaved 回调。
  */
 import { useEffect, useState } from 'react';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Sparkles, Loader2, AlertTriangle, Settings } from 'lucide-react';
 import { Modal } from '../../components/ui';
 import { Button, Input, Textarea } from '../../components/ui';
 import { bookRepository } from '../../lib/repositories';
 import { executeWorldviewBatch } from '../../lib/aiTools';
-import { useToastStore } from '../../stores';
+import { useToastStore, useAIModelStore } from '../../stores';
 import type { Book } from '../../types';
 import { cn } from '../../utils/cn';
 
@@ -84,6 +85,16 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
   const [generatingWorld, setGeneratingWorld] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pushToast = useToastStore((s) => s.pushToast);
+  const navigate = useNavigate();
+  const models = useAIModelStore((s) => s.models);
+  const modelError = useAIModelStore((s) => s.error);
+
+  // 新建模式下检查 AI 大模型是否已配置（编辑模式不检查，作品已存在）
+  const isCreateMode = !book;
+  const enabledModelCount = models.filter((m) => m.enabled).length;
+  const hasEnabledModel = enabledModelCount > 0;
+  // 模型未配置：无启用模型，且非加载中、无服务端错误（避免误判加载态为"未配置"）
+  const modelUnconfigured = isCreateMode && !hasEnabledModel && !modelError;
 
   // book 变化或弹窗打开时同步表单
   useEffect(() => {
@@ -221,6 +232,36 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
       width="520px"
     >
       <div className="flex flex-col gap-4">
+        {/* AI 模型未配置提示（仅新建模式） */}
+        {modelUnconfigured && (
+          <div className="flex items-start gap-3 rounded-lg border border-primary/40 bg-primary/8 px-4 py-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+            <div className="flex-1">
+              <p className="font-serif text-sm font-medium text-foreground">
+                尚未配置 AI 大模型
+              </p>
+              <p className="mt-0.5 font-sans text-xs text-muted-foreground">
+                Scribe 的续写、大纲、世界观生成等 AI 功能依赖大模型。你仍可先创建作品，稍后再配置模型。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                navigate('/settings');
+              }}
+              className={cn(
+                'flex shrink-0 items-center gap-1.5 rounded-md border border-primary/40 bg-background px-3 py-1.5',
+                'font-sans text-xs text-primary transition-all',
+                'hover:bg-primary/10 hover:shadow-soft',
+              )}
+            >
+              <Settings className="h-3 w-3" aria-hidden="true" />
+              前往设置
+            </button>
+          </div>
+        )}
+
         {/* 书名 */}
         <Input
           label="作品名称"
@@ -352,14 +393,14 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
             <button
               type="button"
               onClick={handleCreateWithWorldview}
-              disabled={submitting || generatingWorld}
+              disabled={submitting || generatingWorld || modelUnconfigured}
               className={cn(
                 'flex items-center gap-1.5 rounded border border-secondary/40 bg-secondary/5 px-3 py-2',
                 'font-serif text-sm text-secondary transition-all',
                 'hover:bg-secondary/10 hover:shadow-soft',
                 'disabled:cursor-not-allowed disabled:opacity-50',
               )}
-              title="创建作品并调用 AI 自动生成 6 大分类世界观"
+              title={modelUnconfigured ? '请先配置 AI 大模型' : '创建作品并调用 AI 自动生成 6 大分类世界观'}
             >
               {generatingWorld ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />

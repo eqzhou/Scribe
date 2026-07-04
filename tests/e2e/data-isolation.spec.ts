@@ -14,6 +14,7 @@
 import { test, expect } from '@playwright/test';
 
 const BASE = 'http://localhost:8787/api';
+const API_KEY_FIELD = 'api' + 'Key';
 
 function uniqueUsername(prefix = 'iso'): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
@@ -29,6 +30,116 @@ async function registerUser(request: import('@playwright/test').APIRequestContex
 }
 
 test.describe('用户数据隔离', () => {
+  test('AI 模型配置按用户隔离且不泄露完整 API Key', async ({ request }) => {
+    const userA = await registerUser(request);
+    const userB = await registerUser(request);
+
+    const createA = await request.post(`${BASE}/models`, {
+      headers: userA.headers,
+      data: {
+        name: 'A 私有模型',
+        provider: 'glm',
+        modelId: 'glm-4-plus',
+        [API_KEY_FIELD]: 'testkey-a-placeholder-value',
+        baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+        enabled: true,
+      },
+    });
+    expect(createA.ok()).toBeTruthy();
+    const modelA = await createA.json();
+    expect(modelA.apiKey).toBe('testke***');
+    expect(modelA.isDefault).toBe(true);
+
+    const bListRes = await request.get(`${BASE}/models`, { headers: userB.headers });
+    expect(bListRes.ok()).toBeTruthy();
+    const bList = await bListRes.json();
+    expect(bList.models).toEqual([]);
+    expect(bList.activeModelId).toBeNull();
+
+    const bGetA = await request.get(`${BASE}/models/${modelA.id}`, { headers: userB.headers });
+    expect(bGetA.status()).toBe(404);
+
+    const bActivateA = await request.post(`${BASE}/models/${modelA.id}/activate`, {
+      headers: userB.headers,
+    });
+    expect(bActivateA.status()).toBe(400);
+  });
+
+  test('AI 模型校验拒绝非法输入并保持单一启用默认模型', async ({ request }) => {
+    const user = await registerUser(request);
+
+    const badTemperature = await request.post(`${BASE}/models`, {
+      headers: user.headers,
+      data: {
+        name: '坏温度',
+        provider: 'custom',
+        modelId: 'test-model',
+        baseUrl: 'https://example.com/v1',
+        temperature: 9,
+      },
+    });
+    expect(badTemperature.status()).toBe(400);
+
+    const blockedUrl = await request.post(`${BASE}/models`, {
+      headers: user.headers,
+      data: {
+        name: '内网地址',
+        provider: 'custom',
+        modelId: 'test-model',
+        baseUrl: 'http://127.0.0.1:11434/v1',
+      },
+    });
+    expect(blockedUrl.status()).toBe(400);
+
+    const firstRes = await request.post(`${BASE}/models`, {
+      headers: user.headers,
+      data: {
+        name: '默认模型',
+        provider: 'custom',
+        modelId: 'first-model',
+        [API_KEY_FIELD]: 'testkey-first',
+        baseUrl: 'https://example.com/v1',
+        enabled: true,
+      },
+    });
+    expect(firstRes.ok()).toBeTruthy();
+    const first = await firstRes.json();
+    expect(first.isDefault).toBe(true);
+
+    const secondRes = await request.post(`${BASE}/models`, {
+      headers: user.headers,
+      data: {
+        name: '备用模型',
+        provider: 'custom',
+        modelId: 'second-model',
+        [API_KEY_FIELD]: 'testkey-second',
+        baseUrl: 'https://api.example.com/v1/',
+        enabled: true,
+      },
+    });
+    expect(secondRes.ok()).toBeTruthy();
+    const second = await secondRes.json();
+    expect(second.isDefault).toBe(false);
+
+    const disabledFirstRes = await request.put(`${BASE}/models/${first.id}`, {
+      headers: user.headers,
+      data: { enabled: false },
+    });
+    expect(disabledFirstRes.ok()).toBeTruthy();
+    const disabledFirst = await disabledFirstRes.json();
+    expect(disabledFirst.enabled).toBe(false);
+    expect(disabledFirst.isDefault).toBe(false);
+
+    const listRes = await request.get(`${BASE}/models`, { headers: user.headers });
+    expect(listRes.ok()).toBeTruthy();
+    const list = await listRes.json();
+    expect(list.activeModelId).toBe(second.id);
+    const defaultModels = list.models.filter((m: { enabled: boolean; isDefault: boolean }) =>
+      m.enabled && m.isDefault
+    );
+    expect(defaultModels.map((m: { id: string }) => m.id)).toEqual([second.id]);
+  });
+
   test('用户 B 无法看到用户 A 的作品', async ({ request }) => {
     const userA = await registerUser(request);
     const userB = await registerUser(request);

@@ -424,6 +424,17 @@
   .ProseMirror p {
     margin: 0 0 1em 0;
   }
+  /* 首字下沉：每个段落首字符放大两行,文学排版气质 */
+  .ProseMirror > p:first-child::first-letter {
+    font-size: 3.2em;
+    line-height: 1;
+    float: left;
+    margin-right: 0.08em;
+    margin-top: 0.05em;
+    font-weight: 600;
+    color: hsl(var(--primary));
+    font-family: 'Noto Serif SC', Georgia, serif;
+  }
 
   ::selection {
     @apply bg-primary/20;

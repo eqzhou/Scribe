@@ -29,8 +29,7 @@ test.describe('作品 + 章节 UI 全流程', () => {
     await page.waitForURL('**/editor', { timeout: 15000 });
 
     // 2. 进入项目页创建作品
-    await page.goto('/projects');
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto('/projects', { waitUntil: 'domcontentloaded' });
 
     // 点击新建作品按钮
     await page.click('button:has-text("新建作品")');
@@ -82,7 +81,7 @@ test.describe('作品 + 章节 UI 全流程', () => {
   });
 
   test('落地页主题切换功能', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
 
     const themeToggle = page.locator('#theme-toggle');
     await expect(themeToggle).toBeVisible();
@@ -100,7 +99,7 @@ test.describe('作品 + 章节 UI 全流程', () => {
   });
 
   test('落地页所有导航锚点可跳转', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
 
     // 功能、AI 助写、数据安全 锚点链接存在（导航栏中）
     await expect(page.locator('nav a[href="#features"]')).toBeVisible();
