@@ -60,6 +60,11 @@ app.use('/api', requireAuth, foreshadowingRouter);
 app.use('/api', requireAuth, inspirationRouter);
 app.use('/api', requireAuth, writingLogsRouter);
 
+// API 未匹配时始终返回 JSON，避免前端把 Express 默认 HTML 404 作为错误正文展示。
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: '接口不存在' });
+});
+
 // 静态文件托管：生产模式下直接由后端服务提供前端构建产物
 // __dirname 在 ESM 下需要通过 fileURLToPath 构造
 // server/dist/..  = 项目根目录，dist/ 即前端构建产物

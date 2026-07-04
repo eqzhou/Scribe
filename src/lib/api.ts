@@ -63,7 +63,12 @@ async function parseError(res: Response): Promise<string> {
   }
   try {
     const text = await res.text();
-    if (text) return text;
+    if (text) {
+      if (/^\s*<!doctype html/i.test(text) || /^\s*<html[\s>]/i.test(text)) {
+        return `服务器返回 HTML 错误页（${res.status}）`;
+      }
+      return text.length > 200 ? `${text.slice(0, 200)}...` : text;
+    }
   } catch {
     // 忽略
   }

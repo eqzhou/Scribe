@@ -87,7 +87,7 @@ test.describe('API 路径契约验证', () => {
 
     for (const path of wrongPaths) {
       const res = await request.get(`${BASE}${path}`, { headers });
-      // 要么 404，要么返回非 JSON（HTML）
+      // 要么 404 JSON 错误，要么返回非 JSON；总之不能返回成功数组
       const contentType = res.headers()['content-type'] ?? '';
       const isJson = contentType.includes('application/json');
       // 驼峰路径不应该返回 JSON 数组
@@ -316,5 +316,35 @@ test.describe('API 路径契约验证', () => {
     expect(rangeRes.ok()).toBeTruthy();
     const range = await rangeRes.json();
     expect(range.length).toBe(1);
+
+    // 单条读取、更新、删除路径需与前端通用 Repository 保持一致
+    const created = await logRes.json();
+    const getRes = await request.get(`${BASE}/writing-logs/${created.id}`, { headers });
+    expect(getRes.ok(), `GET /writing-logs/:id 应返回 200`).toBeTruthy();
+
+    const updateRes = await request.patch(`${BASE}/writing-logs/${created.id}`, {
+      headers,
+      data: { wordCount: 1200, duration: 2100 },
+    });
+    expect(updateRes.ok(), `PATCH /writing-logs/:id 应返回 200`).toBeTruthy();
+    const updated = await updateRes.json();
+    expect(updated.wordCount).toBe(1200);
+    expect(updated.duration).toBe(2100);
+
+    const deleteRes = await request.delete(`${BASE}/writing-logs/${created.id}`, { headers });
+    expect(deleteRes.ok(), `DELETE /writing-logs/:id 应返回 200`).toBeTruthy();
+  });
+
+  test('未知 API 路径返回 JSON 404', async ({ request }) => {
+    const { headers } = await setupUserAndBook(request);
+    const res = await request.patch(`${BASE}/writing-logs/not-found-route/extra`, {
+      headers,
+      data: { wordCount: 1 },
+    });
+
+    expect(res.status()).toBe(404);
+    expect(res.headers()['content-type']).toContain('application/json');
+    const body = await res.json();
+    expect(body.error).toBe('接口不存在');
   });
 });

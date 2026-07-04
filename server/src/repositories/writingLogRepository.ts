@@ -1,6 +1,13 @@
 // 写作记录 Repository
 import { prisma } from '../lib/prisma.js';
 
+// 获取单条写作记录
+export async function get(userId: string, id: string) {
+  return prisma.writingLog.findFirst({
+    where: { id, userId },
+  });
+}
+
 // 列出作品下全部写作记录
 export async function listByBook(userId: string, bookId: string) {
   return prisma.writingLog.findMany({
@@ -24,6 +31,38 @@ export async function listByDateRange(
     },
     orderBy: { date: 'asc' },
   });
+}
+
+// 更新单条写作记录（用于自动保存会话刷新当天累计值）
+export async function update(
+  userId: string,
+  id: string,
+  data: { date?: string; wordCount?: number; duration?: number },
+) {
+  const existing = await prisma.writingLog.findFirst({
+    where: { id, userId },
+  });
+  if (!existing) return null;
+
+  return prisma.writingLog.update({
+    where: { id },
+    data: {
+      date: data.date,
+      wordCount: data.wordCount,
+      duration: data.duration,
+    },
+  });
+}
+
+// 删除单条写作记录
+export async function remove(userId: string, id: string): Promise<boolean> {
+  const existing = await prisma.writingLog.findFirst({
+    where: { id, userId },
+    select: { id: true },
+  });
+  if (!existing) return false;
+  await prisma.writingLog.delete({ where: { id } });
+  return true;
 }
 
 // 获取当前日期字符串（YYYY-MM-DD，本地时区）
