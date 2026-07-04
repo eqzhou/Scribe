@@ -49,6 +49,12 @@ async function setupUserAndBook(request: import('@playwright/test').APIRequestCo
 
 test.describe('API 路径契约验证', () => {
   test('落地页截图资源可访问', async ({ request }) => {
+    const landing = await request.get('/');
+    const html = await landing.text();
+    expect(html).toContain('src="hero-screenshot.jpg"');
+    expect(html).not.toContain("'/hero-screenshot.jpg'");
+    expect(html).not.toContain("'/hero-screenshot-dark.jpg'");
+
     for (const path of ['/hero-screenshot.jpg', '/hero-screenshot-dark.jpg']) {
       const res = await request.get(path);
       expect(res.ok(), `GET ${path} 应返回 2xx，实际 ${res.status()}`).toBeTruthy();

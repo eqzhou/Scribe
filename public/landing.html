@@ -368,7 +368,7 @@
           </div>
           <div class="mt-16 relative" style="max-width: 960px; margin-left: auto; margin-right: auto;">
             <div class="hero-screenshot-frame" style="border-radius: var(--radius-xl); overflow: hidden; border: 1px solid var(--color-border); transform: rotate(-1deg); box-shadow: 0 4px 24px rgba(0,0,0,0.06);">
-              <img id="hero-screenshot-img" src="/hero-screenshot.jpg" alt="Scribe 小说创作工作区,展示章节编辑器和故事结构" class="w-full block hero-screenshot" style="aspect-ratio: 16/10; object-fit: cover;" loading="eager">
+              <img id="hero-screenshot-img" src="hero-screenshot.jpg" alt="Scribe 小说创作工作区,展示章节编辑器和故事结构" class="w-full block hero-screenshot" style="aspect-ratio: 16/10; object-fit: cover;" loading="eager">
             </div>
           </div>
         </div>
@@ -630,9 +630,14 @@
         root.style.setProperty('--color-primary-hover', isDark ? t.hoverDark : t.hoverLight);
         root.style.setProperty('--color-primary-light', isDark ? t.lightBgDark : t.lightBg);
         root.style.setProperty('--color-primary-muted', isDark ? t.mutedDark : t.muted);
-        // 截图按明暗切换：浅色用 hero-screenshot.jpg,深色用 hero-screenshot-dark.jpg
+        // 截图按明暗切换，并保留当前部署前缀（如 /Scribe/）。
         var img = document.getElementById('hero-screenshot-img');
-        if (img) img.src = isDark ? '/hero-screenshot-dark.jpg' : '/hero-screenshot.jpg';
+        if (img) {
+          var nextFile = isDark ? 'hero-screenshot-dark.jpg' : 'hero-screenshot.jpg';
+          var currentSrc = img.getAttribute('src') || '';
+          var prefix = currentSrc.replace(/hero-screenshot(?:-dark)?\.jpg(?:[?#].*)?$/, '');
+          img.src = prefix + nextFile;
+        }
       }
 
       // 明暗模式：优先读应用 scribe-ui,其次读落地页 scribe-theme
@@ -657,6 +662,13 @@
 
       var currentMode = readMode();
       var currentColor = readColorTheme();
+
+      function appPath(path) {
+        var base = window.location.pathname === '/Scribe' || window.location.pathname.indexOf('/Scribe/') === 0
+          ? '/Scribe'
+          : '';
+        return base + path;
+      }
 
       // 初始化：应用明暗 + 色彩主题
       (function() {
@@ -757,10 +769,10 @@
           if (avatarEl) avatarEl.textContent = name.charAt(0).toUpperCase();
           if (nameEl) nameEl.textContent = name;
 
-          // CTA 跳转项目列表
-          if (heroCta) heroCta.href = '/projects';
+          // CTA 跳转项目列表，并保留 /Scribe 子路径部署前缀。
+          if (heroCta) heroCta.href = appPath('/projects');
           if (heroCtaText) heroCtaText.textContent = '进入工作台';
-          if (finalCta) finalCta.href = '/projects';
+          if (finalCta) finalCta.href = appPath('/projects');
           if (finalCtaText) finalCtaText.textContent = '进入工作台';
 
           lucide.createIcons();
@@ -795,7 +807,7 @@
             } catch(e) {
               console.warn('登出: 清除 localStorage 失败', e);
             }
-            window.location.href = '/';
+            window.location.href = appPath('/');
           });
         }
       })();
