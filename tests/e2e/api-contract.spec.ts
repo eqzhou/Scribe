@@ -347,4 +347,25 @@ test.describe('API 路径契约验证', () => {
     const body = await res.json();
     expect(body.error).toBe('接口不存在');
   });
+
+  test('AI 项目蓝图与章节结构端点已注册', async ({ request }) => {
+    const { headers } = await setupUserAndBook(request);
+
+    const blueprintRes = await request.post(`${BASE}/ai/project-blueprint`, {
+      headers,
+      data: {
+        bookTitle: '端点验证作品',
+      },
+    });
+    expect(blueprintRes.status(), 'project-blueprint 应命中路由并校验必填字段').toBe(400);
+
+    const architectureRes = await request.post(`${BASE}/ai/chapter-architecture`, {
+      headers,
+      data: {
+        chapterTitle: '第一章',
+        chapterContent: '调查员在旧港发现一枚会发光的记忆匣。',
+      },
+    });
+    expect(architectureRes.status(), 'chapter-architecture 应命中路由并校验必填字段').toBe(400);
+  });
 });

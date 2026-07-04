@@ -16,7 +16,7 @@ import { Sparkles, Loader2, AlertTriangle, Settings } from 'lucide-react';
 import { Modal } from '../../components/ui';
 import { Button, Input, Textarea } from '../../components/ui';
 import { bookRepository } from '../../lib/repositories';
-import { executeWorldviewBatch } from '../../lib/aiTools';
+import { executeProjectBlueprint } from '../../lib/aiTools';
 import { useToastStore, useAIModelStore } from '../../stores';
 import type { Book } from '../../types';
 import { cn } from '../../utils/cn';
@@ -82,7 +82,7 @@ interface BookFormState {
 export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
   const [form, setForm] = useState<BookFormState>(DEFAULT_FORM);
   const [submitting, setSubmitting] = useState(false);
-  const [generatingWorld, setGeneratingWorld] = useState(false);
+  const [generatingBlueprint, setGeneratingBlueprint] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pushToast = useToastStore((s) => s.pushToast);
   const navigate = useNavigate();
@@ -167,14 +167,14 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
     }
   };
 
-  /** 创建作品并立即 AI 生成 6 大分类世界观 */
-  const handleCreateWithWorldview = async (): Promise<void> => {
+  /** 创建作品并立即 AI 生成项目蓝图 */
+  const handleCreateWithBlueprint = async (): Promise<void> => {
     if (!form.title.trim()) {
       setError('请填写作品名称');
       return;
     }
     if (!form.synopsis.trim()) {
-      setError('请填写作品简介，AI 需要简介才能生成世界观');
+      setError('请填写作品简介，AI 需要简介才能生成项目架构');
       return;
     }
     if (form.targetWords <= 0 || form.dailyGoal <= 0) {
@@ -182,7 +182,7 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
       return;
     }
 
-    setGeneratingWorld(true);
+    setGeneratingBlueprint(true);
     setError(null);
     let saved: Book | null = null;
     try {
@@ -196,14 +196,16 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
         coverColor: form.coverColor,
         dailyGoal: form.dailyGoal,
       });
-      // 2. 调用 AI 批量生成世界观（直接写入 db.worldview）
-      await executeWorldviewBatch(
+      // 2. 调用 AI 生成完整项目蓝图（世界观 / 角色 / 场景 / 剧情 / 灵感 / 章节草稿）
+      await executeProjectBlueprint(
         saved.id,
         saved.title,
+        saved.subtitle,
         saved.synopsis,
         saved.genre,
+        saved.targetWords,
       );
-      pushToast('success', '作品已创建，世界观已生成');
+      pushToast('success', '作品已创建，小说架构已生成');
       onSaved(saved);
       onClose();
     } catch (err) {
@@ -220,7 +222,7 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
       }
       setError(err instanceof Error ? err.message : '生成失败');
     } finally {
-      setGeneratingWorld(false);
+      setGeneratingBlueprint(false);
     }
   };
 
@@ -385,29 +387,29 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
 
         {/* 操作区 */}
         <div className="flex items-center justify-end gap-2 pt-2">
-          <Button variant="ghost" size="md" onClick={onClose} disabled={submitting || generatingWorld}>
+          <Button variant="ghost" size="md" onClick={onClose} disabled={submitting || generatingBlueprint}>
             取消
           </Button>
-          {/* 新建模式下额外提供"创建并 AI 生成世界观"按钮 */}
+          {/* 新建模式下额外提供"创建并 AI 生成架构"按钮 */}
           {!book && (
             <button
               type="button"
-              onClick={handleCreateWithWorldview}
-              disabled={submitting || generatingWorld || modelUnconfigured}
+              onClick={handleCreateWithBlueprint}
+              disabled={submitting || generatingBlueprint || modelUnconfigured}
               className={cn(
                 'flex items-center gap-1.5 rounded border border-secondary/40 bg-secondary/5 px-3 py-2',
                 'font-serif text-sm text-secondary transition-all',
                 'hover:bg-secondary/10 hover:shadow-soft',
                 'disabled:cursor-not-allowed disabled:opacity-50',
               )}
-              title={modelUnconfigured ? '请先配置 AI 大模型' : '创建作品并调用 AI 自动生成 6 大分类世界观'}
+              title={modelUnconfigured ? '请先配置 AI 大模型' : '创建作品并调用 AI 自动生成世界观、角色、场景、剧情、灵感与章节草稿'}
             >
-              {generatingWorld ? (
+              {generatingBlueprint ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
               ) : (
                 <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
               )}
-              {generatingWorld ? '生成中…' : '创建并生成世界观'}
+              {generatingBlueprint ? '生成中…' : '创建并生成架构'}
             </button>
           )}
           <Button
@@ -415,7 +417,7 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
             size="md"
             onClick={handleSubmit}
             loading={submitting}
-            disabled={generatingWorld}
+            disabled={generatingBlueprint}
           >
             {book ? '保存修改' : '创建作品'}
           </Button>

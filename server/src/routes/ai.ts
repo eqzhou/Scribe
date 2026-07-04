@@ -11,6 +11,8 @@ import {
   buildDialogueMessages,
   buildWorldviewMessages,
   buildWorldviewBatchMessages,
+  buildProjectBlueprintMessages,
+  buildChapterArchitectureMessages,
   buildCharacterGenerateMessages,
   buildCharacterExtractMessages,
   type AIContext,
@@ -331,6 +333,46 @@ router.post('/worldview-batch', createJsonRoute<{
 }>(
   (body) => buildWorldviewBatchMessages(body.bookTitle, body.synopsis ?? '', body.genre ?? '其他'),
   ['bookTitle'],
+));
+
+// 项目蓝图：新建作品时生成世界观、角色、场景、剧情、灵感与章节草案
+router.post('/project-blueprint', createJsonRoute<{
+  bookTitle: string;
+  subtitle?: string;
+  synopsis: string;
+  genre: string;
+  targetWords: number;
+}>(
+  (body) => buildProjectBlueprintMessages(
+    body.bookTitle,
+    body.subtitle,
+    body.synopsis ?? '',
+    body.genre ?? '其他',
+    Number(body.targetWords ?? 0),
+  ),
+  ['bookTitle', 'synopsis'],
+));
+
+// 章节结构分析：正文生成后提取本章副产物
+router.post('/chapter-architecture', createJsonRoute<{
+  chapterTitle: string;
+  chapterContent: string;
+  context: AIContext;
+  existingCharacters?: Array<{ name: string; alias?: string }>;
+  existingScenes?: Array<{ name: string }>;
+  existingWorldview?: Array<{ title: string }>;
+  existingPlotLines?: Array<{ title: string }>;
+}>(
+  (body) => buildChapterArchitectureMessages(
+    body.chapterTitle,
+    body.chapterContent ?? '',
+    body.context,
+    body.existingCharacters ?? [],
+    body.existingScenes ?? [],
+    body.existingWorldview ?? [],
+    body.existingPlotLines ?? [],
+  ),
+  ['chapterTitle', 'chapterContent', 'context'],
 ));
 
 // 角色生成：基于用户 prompt 生成单个角色档案

@@ -9,6 +9,8 @@ import type {
   OutlineItem,
   RewriteStyle,
   WorldviewBatchItem,
+  ProjectBlueprintResult,
+  ChapterArchitectureResult,
   CharacterGenerateResult,
   CharacterExtractItem,
 } from '../types/ai';
@@ -20,12 +22,22 @@ import {
   streamDialogue,
   streamWorldview,
   streamWorldviewBatch,
+  streamProjectBlueprint,
+  streamChapterArchitecture,
   streamCharacterGenerate,
   streamCharacterExtract,
 } from './aiClient';
 import { useToastStore } from '../stores';
-import { worldviewRepository, characterRepository } from './repositories';
-import type { WorldviewCategory, CharacterRole } from '../types';
+import {
+  chapterRepository,
+  characterRepository,
+  inspirationRepository,
+  plotLineRepository,
+  plotPointRepository,
+  sceneRepository,
+  worldviewRepository,
+} from './repositories';
+import type { Character, PlotLine, Scene, WorldviewCategory, CharacterRole, PlotLineType, PlotLineStatus } from '../types';
 
 /** 合法的世界观分类白名单（用于校验 AI 返回值） */
 const VALID_WV_CATEGORIES: ReadonlySet<string> = new Set([
@@ -48,6 +60,71 @@ export const VALID_ROLES: ReadonlySet<string> = new Set([
 /** 判断角色类型是否合法 */
 export function isValidRole(role: string): boolean {
   return VALID_ROLES.has(role);
+}
+
+const VALID_PLOT_LINE_TYPES: ReadonlySet<string> = new Set(['main', 'sub']);
+const VALID_PLOT_LINE_STATUSES: ReadonlySet<string> = new Set([
+  'planning',
+  'writing',
+  'done',
+  'shelved',
+]);
+
+function plainTextToHtml(text: string): string {
+  const paragraphs = String(text || '')
+    .split(/\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (paragraphs.length === 0) return '<p></p>';
+  return paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join('');
+}
+
+function escapeHtml(text: string): string {
+  return String(text)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function uniqueStrings(values: unknown, limit = 8): string[] {
+  if (!Array.isArray(values)) return [];
+  return Array.from(
+    new Set(
+      values
+        .map((v) => String(v ?? '').trim())
+        .filter(Boolean),
+    ),
+  ).slice(0, limit);
+}
+
+function safeRole(role: unknown): CharacterRole {
+  const value = String(role ?? '');
+  return VALID_ROLES.has(value) ? (value as CharacterRole) : 'supporting';
+}
+
+function safeWorldviewCategory(category: unknown): WorldviewCategory {
+  const value = String(category ?? '');
+  return VALID_WV_CATEGORIES.has(value) ? (value as WorldviewCategory) : 'culture';
+}
+
+function safePlotLineType(type: unknown): PlotLineType {
+  const value = String(type ?? '');
+  return VALID_PLOT_LINE_TYPES.has(value) ? (value as PlotLineType) : 'main';
+}
+
+function safePlotLineStatus(status: unknown): PlotLineStatus {
+  const value = String(status ?? '');
+  return VALID_PLOT_LINE_STATUSES.has(value) ? (value as PlotLineStatus) : 'planning';
+}
+
+function byName<T extends { name: string }>(items: T[]): Map<string, T> {
+  return new Map(items.map((item) => [item.name, item]));
+}
+
+function byTitle<T extends { title: string }>(items: T[]): Map<string, T> {
+  return new Map(items.map((item) => [item.title, item]));
 }
 
 /** 从作品 ID 构建 AI 上下文（角色 + 世界观摘要） */
@@ -438,6 +515,228 @@ export async function executeWorldviewBatch(
   });
 }
 
+export interface ProjectBlueprintInsertSummary {
+  worldview: number;
+  characters: number;
+  scenes: number;
+  plotLines: number;
+  plotPoints: number;
+  inspirations: number;
+  chapters: number;
+}
+
+/**
+ * 执行项目蓝图生成并写入资料库。
+ */
+export async function executeProjectBlueprint(
+  bookId: string,
+  bookTitle: string,
+  subtitle: string,
+  synopsis: string,
+  genre: string,
+  targetWords: number,
+  onProgress?: (text: string) => void,
+  signal?: AbortSignal,
+): Promise<ProjectBlueprintInsertSummary> {
+  return new Promise((resolve, reject) => {
+    streamProjectBlueprint(
+      { bookTitle, subtitle, synopsis, genre, targetWords },
+      (chunk) => onProgress?.(chunk),
+      async (blueprint: ProjectBlueprintResult | null) => {
+        try {
+          if (!blueprint) {
+            throw new Error('AI 未返回有效项目蓝图');
+          }
+          const summary = await insertProjectBlueprint(bookId, blueprint);
+          useToastStore.getState().pushToast(
+            'success',
+            `架构已生成：世界观 ${summary.worldview}、角色 ${summary.characters}、场景 ${summary.scenes}、剧情节点 ${summary.plotPoints}、灵感 ${summary.inspirations}`,
+          );
+          resolve(summary);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          useToastStore.getState().pushToast('error', `项目蓝图入库失败：${msg}`);
+          reject(err);
+        }
+      },
+      (err) => {
+        useToastStore.getState().pushToast('error', `AI 项目蓝图生成失败：${err.message}`);
+        reject(err);
+      },
+      signal,
+    );
+  });
+}
+
+async function insertProjectBlueprint(
+  bookId: string,
+  blueprint: ProjectBlueprintResult,
+): Promise<ProjectBlueprintInsertSummary> {
+  const summary: ProjectBlueprintInsertSummary = {
+    worldview: 0,
+    characters: 0,
+    scenes: 0,
+    plotLines: 0,
+    plotPoints: 0,
+    inspirations: 0,
+    chapters: 0,
+  };
+
+  const worldviewMap = new Map<string, { id: string; title: string }>();
+  for (const item of blueprint.worldview ?? []) {
+    const title = String(item.title ?? '').trim();
+    if (!title || worldviewMap.has(title)) continue;
+    const created = await worldviewRepository.create({
+      bookId,
+      category: safeWorldviewCategory(item.category),
+      title,
+      content: plainTextToHtml(item.content ?? ''),
+      tags: uniqueStrings(item.tags, 6),
+      relatedCharacterIds: [],
+      relatedSceneIds: [],
+    });
+    worldviewMap.set(created.title, { id: created.id, title: created.title });
+    summary.worldview++;
+  }
+
+  const characterMap = new Map<string, Character>();
+  for (const item of blueprint.characters ?? []) {
+    const name = String(item.name ?? '').trim();
+    if (!name || characterMap.has(name)) continue;
+    const relatedWorldviewIds = uniqueStrings(item.relatedWorldviewTitles, 8)
+      .map((title) => worldviewMap.get(title)?.id)
+      .filter((id): id is string => Boolean(id));
+    const created = await characterRepository.create({
+      bookId,
+      name,
+      alias: String(item.alias ?? ''),
+      faction: String(item.faction ?? ''),
+      role: safeRole(item.role),
+      appearance: String(item.appearance ?? ''),
+      personality: String(item.personality ?? ''),
+      background: String(item.background ?? ''),
+      arc: String(item.arc ?? ''),
+      tags: uniqueStrings(item.tags, 8),
+      relatedWorldviewIds,
+      appearanceColor: '#7a8ca0',
+    });
+    characterMap.set(created.name, created);
+    summary.characters++;
+  }
+
+  const chapterMap = new Map<string, { id: string; title: string }>();
+  for (const [index, item] of (blueprint.chapters ?? []).entries()) {
+    const title = String(item.title ?? '').trim();
+    if (!title || chapterMap.has(title)) continue;
+    const outline = String(item.outline ?? item.summary ?? '').trim();
+    const created = await chapterRepository.create({
+      bookId,
+      title,
+      summary: String(item.summary ?? ''),
+      outline,
+      status: 'draft',
+      wordCount: 0,
+      order: Number.isFinite(item.order) ? Number(item.order) : index,
+      content: '',
+    });
+    chapterMap.set(created.title, { id: created.id, title: created.title });
+    summary.chapters++;
+  }
+
+  const sceneMap = new Map<string, Scene>();
+  for (const item of blueprint.scenes ?? []) {
+    const name = String(item.name ?? '').trim();
+    if (!name || sceneMap.has(name)) continue;
+    const characterIds = uniqueStrings(item.characterNames, 8)
+      .map((name) => characterMap.get(name)?.id)
+      .filter((id): id is string => Boolean(id));
+    const worldviewEntryIds = uniqueStrings(item.worldviewTitles, 8)
+      .map((title) => worldviewMap.get(title)?.id)
+      .filter((id): id is string => Boolean(id));
+    const chapterIds = uniqueStrings(item.chapterTitles, 8)
+      .map((title) => chapterMap.get(title)?.id)
+      .filter((id): id is string => Boolean(id));
+    const created = await sceneRepository.create({
+      bookId,
+      name,
+      description: String(item.description ?? ''),
+      atmosphere: uniqueStrings(item.atmosphere, 6),
+      worldviewEntryIds,
+      characterIds,
+      chapterIds,
+    });
+    sceneMap.set(created.name, created);
+    summary.scenes++;
+  }
+
+  const plotLineMap = new Map<string, PlotLine>();
+  for (const [index, item] of (blueprint.plotLines ?? []).entries()) {
+    const title = String(item.title ?? '').trim();
+    if (!title || plotLineMap.has(title)) continue;
+    const created = await plotLineRepository.create({
+      bookId,
+      title,
+      type: safePlotLineType(item.type),
+      synopsis: String(item.synopsis ?? ''),
+      status: safePlotLineStatus(item.status),
+      order: Number.isFinite(item.order) ? Number(item.order) : index,
+    });
+    plotLineMap.set(created.title, created);
+    summary.plotLines++;
+  }
+
+  let fallbackPlotLine = Array.from(plotLineMap.values())[0];
+  if (!fallbackPlotLine) {
+    fallbackPlotLine = await plotLineRepository.create({
+      bookId,
+      title: '主线',
+      type: 'main',
+      synopsis: '作品核心剧情推进线。',
+      status: 'planning',
+      order: 0,
+    });
+    plotLineMap.set(fallbackPlotLine.title, fallbackPlotLine);
+    summary.plotLines++;
+  }
+
+  for (const [index, item] of (blueprint.plotPoints ?? []).entries()) {
+    const title = String(item.title ?? '').trim();
+    if (!title) continue;
+    const plotLine = item.plotLineTitle
+      ? plotLineMap.get(String(item.plotLineTitle))
+      : undefined;
+    const characterIds = uniqueStrings(item.characterNames, 8)
+      .map((name) => characterMap.get(name)?.id)
+      .filter((id): id is string => Boolean(id));
+    await plotPointRepository.create({
+      bookId,
+      plotLineId: (plotLine ?? fallbackPlotLine).id,
+      title,
+      description: String(item.description ?? ''),
+      chapterId: item.chapterTitle ? chapterMap.get(String(item.chapterTitle))?.id : undefined,
+      characterIds,
+      order: Number.isFinite(item.order) ? Number(item.order) : index,
+      timelineOrder: Number.isFinite(item.timelineOrder) ? Number(item.timelineOrder) : index,
+    });
+    summary.plotPoints++;
+  }
+
+  for (const item of blueprint.inspirations ?? []) {
+    const title = String(item.title ?? '').trim();
+    if (!title) continue;
+    await inspirationRepository.create({
+      bookId,
+      title,
+      content: String(item.content ?? ''),
+      tags: uniqueStrings(item.tags, 8),
+      category: String(item.category ?? '项目蓝图'),
+    });
+    summary.inspirations++;
+  }
+
+  return summary;
+}
+
 /**
  * 执行角色生成任务，返回 CharacterGenerateResult（不入库，由调用方决定）。
  *
@@ -559,4 +858,214 @@ export async function executeCharacterExtract(
       signal,
     );
   });
+}
+
+export interface ChapterArchitectureInsertSummary {
+  characters: number;
+  scenes: number;
+  plotPoints: number;
+  worldview: number;
+  inspirations: number;
+}
+
+/**
+ * 分析章节正文，并同步本章结构化副产物到资料库。
+ */
+export async function executeChapterArchitectureSync(
+  bookId: string,
+  chapterId: string,
+  chapterTitle: string,
+  chapterContent: string,
+  bookTitle: string,
+  synopsis: string,
+  onProgress?: (text: string) => void,
+  signal?: AbortSignal,
+): Promise<ChapterArchitectureInsertSummary> {
+  const [existingCharacters, existingScenes, existingWorldview, existingPlotLines] = await Promise.all([
+    characterRepository.list(bookId),
+    sceneRepository.list(bookId),
+    worldviewRepository.list(bookId),
+    plotLineRepository.list(bookId),
+  ]);
+  const context = await buildAIContext(bookId, bookTitle, synopsis);
+
+  return new Promise((resolve, reject) => {
+    streamChapterArchitecture(
+      {
+        chapterTitle,
+        chapterContent,
+        context,
+        existingCharacters: existingCharacters.map((c) => ({ name: c.name, alias: c.alias })),
+        existingScenes: existingScenes.map((s) => ({ name: s.name })),
+        existingWorldview: existingWorldview.map((w) => ({ title: w.title })),
+        existingPlotLines: existingPlotLines.map((p) => ({ title: p.title })),
+      },
+      (chunk) => onProgress?.(chunk),
+      async (result: ChapterArchitectureResult | null) => {
+        try {
+          if (!result) {
+            resolve({ characters: 0, scenes: 0, plotPoints: 0, worldview: 0, inspirations: 0 });
+            return;
+          }
+          const summary = await insertChapterArchitecture(
+            bookId,
+            chapterId,
+            result,
+            existingCharacters,
+            existingScenes,
+            existingWorldview,
+            existingPlotLines,
+          );
+          const total = summary.characters + summary.scenes + summary.plotPoints + summary.worldview + summary.inspirations;
+          if (total > 0) {
+            useToastStore.getState().pushToast(
+              'success',
+              `本章资料已同步：角色 ${summary.characters}、场景 ${summary.scenes}、剧情 ${summary.plotPoints}`,
+            );
+          }
+          resolve(summary);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          useToastStore.getState().pushToast('error', `章节资料同步失败：${msg}`);
+          reject(err);
+        }
+      },
+      (err) => {
+        useToastStore.getState().pushToast('error', `AI 章节结构分析失败：${err.message}`);
+        reject(err);
+      },
+      signal,
+    );
+  });
+}
+
+async function insertChapterArchitecture(
+  bookId: string,
+  chapterId: string,
+  result: ChapterArchitectureResult,
+  existingCharacters: Character[],
+  existingScenes: Scene[],
+  existingWorldview: Array<{ id: string; title: string }>,
+  existingPlotLines: PlotLine[],
+): Promise<ChapterArchitectureInsertSummary> {
+  const summary: ChapterArchitectureInsertSummary = {
+    characters: 0,
+    scenes: 0,
+    plotPoints: 0,
+    worldview: 0,
+    inspirations: 0,
+  };
+  const characterMap = byName(existingCharacters);
+  const sceneMap = byName(existingScenes);
+  const worldviewMap = byTitle(existingWorldview);
+  const plotLineMap = byTitle(existingPlotLines);
+
+  for (const item of result.characters ?? []) {
+    const name = String(item.name ?? '').trim();
+    if (!name || characterMap.has(name)) continue;
+    const created = await characterRepository.create({
+      bookId,
+      name,
+      alias: '',
+      faction: '',
+      role: safeRole(item.role),
+      appearance: String(item.appearance ?? ''),
+      personality: String(item.personality ?? ''),
+      background: String(item.background ?? ''),
+      arc: '',
+      tags: [],
+      relatedWorldviewIds: [],
+      appearanceColor: '#7a8ca0',
+    });
+    characterMap.set(created.name, created);
+    summary.characters++;
+  }
+
+  for (const item of result.worldview ?? []) {
+    const title = String(item.title ?? '').trim();
+    if (!title || worldviewMap.has(title)) continue;
+    const created = await worldviewRepository.create({
+      bookId,
+      category: safeWorldviewCategory(item.category),
+      title,
+      content: plainTextToHtml(item.content ?? ''),
+      tags: uniqueStrings(item.tags, 6),
+      relatedCharacterIds: [],
+      relatedSceneIds: [],
+    });
+    worldviewMap.set(created.title, created);
+    summary.worldview++;
+  }
+
+  for (const item of result.scenes ?? []) {
+    const name = String(item.name ?? '').trim();
+    if (!name || sceneMap.has(name)) continue;
+    const characterIds = uniqueStrings(item.characterNames, 8)
+      .map((name) => characterMap.get(name)?.id)
+      .filter((id): id is string => Boolean(id));
+    const worldviewEntryIds = uniqueStrings(item.worldviewTitles, 8)
+      .map((title) => worldviewMap.get(title)?.id)
+      .filter((id): id is string => Boolean(id));
+    const created = await sceneRepository.create({
+      bookId,
+      name,
+      description: String(item.description ?? ''),
+      atmosphere: uniqueStrings(item.atmosphere, 6),
+      worldviewEntryIds,
+      characterIds,
+      chapterIds: [chapterId],
+    });
+    sceneMap.set(created.name, created);
+    summary.scenes++;
+  }
+
+  let fallbackPlotLine = existingPlotLines[0];
+  if (!fallbackPlotLine) {
+    fallbackPlotLine = await plotLineRepository.create({
+      bookId,
+      title: '主线',
+      type: 'main',
+      synopsis: '按章节正文自动整理的主线剧情。',
+      status: 'planning',
+      order: 0,
+    });
+    plotLineMap.set(fallbackPlotLine.title, fallbackPlotLine);
+  }
+
+  for (const [index, item] of (result.plotPoints ?? []).entries()) {
+    const title = String(item.title ?? '').trim();
+    if (!title) continue;
+    const plotLine = item.plotLineTitle
+      ? plotLineMap.get(String(item.plotLineTitle))
+      : undefined;
+    const characterIds = uniqueStrings(item.characterNames, 8)
+      .map((name) => characterMap.get(name)?.id)
+      .filter((id): id is string => Boolean(id));
+    await plotPointRepository.create({
+      bookId,
+      plotLineId: (plotLine ?? fallbackPlotLine).id,
+      title,
+      description: String(item.description ?? ''),
+      chapterId,
+      characterIds,
+      order: Number.isFinite(item.order) ? Number(item.order) : index,
+      timelineOrder: Number.isFinite(item.timelineOrder) ? Number(item.timelineOrder) : index,
+    });
+    summary.plotPoints++;
+  }
+
+  for (const item of result.inspirations ?? []) {
+    const title = String(item.title ?? '').trim();
+    if (!title) continue;
+    await inspirationRepository.create({
+      bookId,
+      title,
+      content: String(item.content ?? ''),
+      tags: uniqueStrings(item.tags, 8),
+      category: String(item.category ?? '章节分析'),
+    });
+    summary.inspirations++;
+  }
+
+  return summary;
 }

@@ -17,7 +17,7 @@ import {
   executeContinue,
   executeRewrite,
   executeFulltextEditor,
-  executeCharacterExtract,
+  executeChapterArchitectureSync,
 } from '../../../lib/aiTools';
 import { useAIStore, useToastStore } from '../../../stores';
 import type { RewriteStyle } from '../../../types/ai';
@@ -86,11 +86,11 @@ export function useAIEditorActions({
   const [fulltextModalOpen, setFulltextModalOpen] = useState(false);
   const [fulltextOutline, setFulltextOutline] = useState('');
 
-  // 延迟角色提取的 timer，组件卸载时清理避免 state-on-unmounted
-  const extractTimerRef = useRef<number | null>(null);
+  // 延迟章节结构同步的 timer，组件卸载时清理避免 state-on-unmounted
+  const architectureTimerRef = useRef<number | null>(null);
   useEffect(() => {
     return () => {
-      if (extractTimerRef.current !== null) window.clearTimeout(extractTimerRef.current);
+      if (architectureTimerRef.current !== null) window.clearTimeout(architectureTimerRef.current);
     };
   }, []);
 
@@ -153,22 +153,25 @@ export function useAIEditorActions({
         book.synopsis,
       );
 
-      // 全文生成完成后，异步触发角色提取（不阻塞主流程，失败静默处理）
-      // 使用 setTimeout 等待 ghost text 内容稳定，再用编辑器纯文本做提取
-      if (extractTimerRef.current !== null) window.clearTimeout(extractTimerRef.current);
-      extractTimerRef.current = window.setTimeout(async () => {
+      // 全文生成完成后，异步触发章节结构同步（角色/场景/剧情/世界观/灵感）。
+      // 使用 setTimeout 等待 ghost text 内容稳定，再用编辑器纯文本做分析。
+      if (architectureTimerRef.current !== null) window.clearTimeout(architectureTimerRef.current);
+      architectureTimerRef.current = window.setTimeout(async () => {
         try {
           // 检查 editor 是否仍可用（用户可能在 1.5s 内切换章节或卸载组件）
           if (!editor || editor.isDestroyed) return;
           const content = editor.getText();
           if (!content || content.length < 50) return;
-          await executeCharacterExtract(
+          await executeChapterArchitectureSync(
             book.id,
+            chapterId,
             chapterTitle,
             content.slice(0, 8000), // 限制长度，避免超长内容
+            book.title,
+            book.synopsis,
           );
         } catch {
-          // 角色提取失败不影响主流程，错误已在 executeCharacterExtract 内 toast
+          // 结构同步失败不影响主流程，错误已在 executeChapterArchitectureSync 内 toast
         }
       }, 1500);
     } catch {

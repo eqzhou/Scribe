@@ -14,6 +14,10 @@ import type {
   WorldviewRequest,
   WorldviewBatchRequest,
   WorldviewBatchItem,
+  ProjectBlueprintRequest,
+  ProjectBlueprintResult,
+  ChapterArchitectureRequest,
+  ChapterArchitectureResult,
   CharacterGenerateRequest,
   CharacterGenerateResult,
   CharacterExtractRequest,
@@ -160,6 +164,14 @@ export const streamDialogue = createStreamFn<DialogueRequest>('/dialogue');
 /** 世界观条目构建 */
 export const streamWorldview = createStreamFn<WorldviewRequest>('/worldview');
 
+function parseJsonOrFallback<T>(raw: string, fallback: T): T {
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 /**
  * 生成章节大纲。
  *
@@ -215,12 +227,55 @@ export async function streamWorldviewBatch(
       onChunk(chunk);
     },
     () => {
-      try {
-        const items = JSON.parse(raw) as WorldviewBatchItem[];
-        onDone(items);
-      } catch {
-        onDone([]);
-      }
+      onDone(parseJsonOrFallback<WorldviewBatchItem[]>(raw, []));
+    },
+    onError,
+    signal,
+  );
+}
+
+/** 项目蓝图生成：返回世界观、角色、场景、剧情、灵感与章节草案。 */
+export async function streamProjectBlueprint(
+  req: ProjectBlueprintRequest,
+  onChunk: OnStreamChunk,
+  onDone: (result: ProjectBlueprintResult | null) => void,
+  onError: OnStreamError,
+  signal?: AbortSignal,
+): Promise<void> {
+  let raw = '';
+  await streamRequest(
+    '/project-blueprint',
+    req,
+    (chunk) => {
+      raw += chunk;
+      onChunk(chunk);
+    },
+    () => {
+      onDone(parseJsonOrFallback<ProjectBlueprintResult | null>(raw, null));
+    },
+    onError,
+    signal,
+  );
+}
+
+/** 章节结构分析：从已生成正文中提取本章资料库副产物。 */
+export async function streamChapterArchitecture(
+  req: ChapterArchitectureRequest,
+  onChunk: OnStreamChunk,
+  onDone: (result: ChapterArchitectureResult | null) => void,
+  onError: OnStreamError,
+  signal?: AbortSignal,
+): Promise<void> {
+  let raw = '';
+  await streamRequest(
+    '/chapter-architecture',
+    req,
+    (chunk) => {
+      raw += chunk;
+      onChunk(chunk);
+    },
+    () => {
+      onDone(parseJsonOrFallback<ChapterArchitectureResult | null>(raw, null));
     },
     onError,
     signal,
@@ -248,11 +303,7 @@ export async function streamCharacterGenerate(
       onChunk(chunk);
     },
     () => {
-      try {
-        onDone(JSON.parse(raw) as CharacterGenerateResult);
-      } catch {
-        onDone(null);
-      }
+      onDone(parseJsonOrFallback<CharacterGenerateResult | null>(raw, null));
     },
     onError,
     signal,
@@ -280,12 +331,7 @@ export async function streamCharacterExtract(
       onChunk(chunk);
     },
     () => {
-      try {
-        const items = JSON.parse(raw) as CharacterExtractItem[];
-        onDone(items);
-      } catch {
-        onDone([]);
-      }
+      onDone(parseJsonOrFallback<CharacterExtractItem[]>(raw, []));
     },
     onError,
     signal,

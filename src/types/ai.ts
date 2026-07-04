@@ -16,6 +16,8 @@ export type AITaskType =
   | 'dialogue'             // 角色对话
   | 'worldview'            // 世界观构建
   | 'worldview-batch'      // 批量世界观构建（作品创建时）
+  | 'project-blueprint'    // 项目蓝图生成（作品创建时）
+  | 'chapter-architecture' // 章节结构分析（正文生成后）
   | 'character-generate'   // 角色生成（基于 prompt）
   | 'character-extract';   // 角色提取（从章节正文）
 
@@ -95,6 +97,68 @@ export interface WorldviewBatchItem {
   tags: string[];
 }
 
+/** 项目蓝图生成请求体 */
+export interface ProjectBlueprintRequest {
+  bookTitle: string;
+  subtitle?: string;
+  synopsis: string;
+  genre: string;
+  targetWords: number;
+}
+
+/** 项目蓝图生成结果 */
+export interface ProjectBlueprintResult {
+  worldview: WorldviewBatchItem[];
+  characters: Array<{
+    name: string;
+    alias?: string;
+    faction?: string;
+    role?: string;
+    appearance?: string;
+    personality?: string;
+    background?: string;
+    arc?: string;
+    tags?: string[];
+    relatedWorldviewTitles?: string[];
+  }>;
+  scenes: Array<{
+    name: string;
+    description: string;
+    atmosphere?: string[];
+    characterNames?: string[];
+    worldviewTitles?: string[];
+    chapterTitles?: string[];
+  }>;
+  plotLines: Array<{
+    title: string;
+    type?: string;
+    synopsis?: string;
+    status?: string;
+    order?: number;
+  }>;
+  plotPoints: Array<{
+    plotLineTitle?: string;
+    title: string;
+    description?: string;
+    chapterTitle?: string;
+    characterNames?: string[];
+    order?: number;
+    timelineOrder?: number;
+  }>;
+  inspirations: Array<{
+    title: string;
+    content: string;
+    tags?: string[];
+    category?: string;
+  }>;
+  chapters: Array<{
+    title: string;
+    summary?: string;
+    outline?: string;
+    order?: number;
+  }>;
+}
+
 /** 角色生成请求体（基于用户 prompt） */
 export interface CharacterGenerateRequest {
   prompt: string;
@@ -131,6 +195,44 @@ export interface CharacterExtractItem {
   appearance: string;
   personality: string;
   background: string;
+}
+
+/** 章节结构分析请求体 */
+export interface ChapterArchitectureRequest {
+  chapterTitle: string;
+  chapterContent: string;
+  context: AIContext;
+  existingCharacters?: Array<{ name: string; alias?: string }>;
+  existingScenes?: Array<{ name: string }>;
+  existingWorldview?: Array<{ title: string }>;
+  existingPlotLines?: Array<{ title: string }>;
+}
+
+/** 章节结构分析结果 */
+export interface ChapterArchitectureResult {
+  characters: CharacterExtractItem[];
+  scenes: Array<{
+    name: string;
+    description: string;
+    atmosphere?: string[];
+    characterNames?: string[];
+    worldviewTitles?: string[];
+  }>;
+  plotPoints: Array<{
+    plotLineTitle?: string;
+    title: string;
+    description?: string;
+    characterNames?: string[];
+    order?: number;
+    timelineOrder?: number;
+  }>;
+  worldview: WorldviewBatchItem[];
+  inspirations: Array<{
+    title: string;
+    content: string;
+    tags?: string[];
+    category?: string;
+  }>;
 }
 
 /** 章节大纲条目（大纲生成结果） */
