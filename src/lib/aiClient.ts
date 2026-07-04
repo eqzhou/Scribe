@@ -164,9 +164,73 @@ export const streamDialogue = createStreamFn<DialogueRequest>('/dialogue');
 /** 世界观条目构建 */
 export const streamWorldview = createStreamFn<WorldviewRequest>('/worldview');
 
+function findJsonEnd(text: string, start: number): number | null {
+  const open = text[start];
+  const close = open === '{' ? '}' : open === '[' ? ']' : '';
+  if (!close) return null;
+
+  const stack = [close];
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start + 1; index < text.length; index++) {
+    const char = text[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+    } else if (char === '{') {
+      stack.push('}');
+    } else if (char === '[') {
+      stack.push(']');
+    } else if (char === stack.at(-1)) {
+      stack.pop();
+      if (stack.length === 0) return index;
+    }
+  }
+
+  return null;
+}
+
+function extractJsonPayload(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return trimmed;
+
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced?.[1]) {
+    return fenced[1].trim();
+  }
+
+  for (let index = 0; index < trimmed.length; index++) {
+    if (trimmed[index] !== '{' && trimmed[index] !== '[') continue;
+    const end = findJsonEnd(trimmed, index);
+    if (end === null) continue;
+
+    const candidate = trimmed.slice(index, end + 1).trim();
+    try {
+      JSON.parse(candidate);
+      return candidate;
+    } catch {
+      // Keep scanning in case prose contains bracketed non-JSON before the payload.
+    }
+  }
+
+  return trimmed;
+}
+
 function parseJsonOrFallback<T>(raw: string, fallback: T): T {
   try {
-    return JSON.parse(raw) as T;
+    return JSON.parse(extractJsonPayload(raw)) as T;
   } catch {
     return fallback;
   }
@@ -195,7 +259,7 @@ export async function streamOutline(
     },
     () => {
       try {
-        const items = JSON.parse(raw) as OutlineItem[];
+        const items = JSON.parse(extractJsonPayload(raw)) as OutlineItem[];
         onDone(items);
       } catch {
         onDone([{ title: '生成结果', summary: raw, keyEvents: [] }]);

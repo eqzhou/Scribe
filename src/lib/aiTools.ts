@@ -37,7 +37,17 @@ import {
   sceneRepository,
   worldviewRepository,
 } from './repositories';
-import type { Character, PlotLine, Scene, WorldviewCategory, CharacterRole, PlotLineType, PlotLineStatus } from '../types';
+import type {
+  Character,
+  Inspiration,
+  PlotLine,
+  PlotPoint,
+  Scene,
+  WorldviewCategory,
+  CharacterRole,
+  PlotLineType,
+  PlotLineStatus,
+} from '../types';
 
 /** 合法的世界观分类白名单（用于校验 AI 返回值） */
 const VALID_WV_CATEGORIES: ReadonlySet<string> = new Set([
@@ -125,6 +135,10 @@ function byName<T extends { name: string }>(items: T[]): Map<string, T> {
 
 function byTitle<T extends { title: string }>(items: T[]): Map<string, T> {
   return new Map(items.map((item) => [item.title, item]));
+}
+
+function mergeStrings(existing: string[], additions: string[]): string[] {
+  return Array.from(new Set([...(existing ?? []), ...additions]));
 }
 
 /** 从作品 ID 构建 AI 上下文（角色 + 世界观摘要） */
@@ -881,11 +895,20 @@ export async function executeChapterArchitectureSync(
   onProgress?: (text: string) => void,
   signal?: AbortSignal,
 ): Promise<ChapterArchitectureInsertSummary> {
-  const [existingCharacters, existingScenes, existingWorldview, existingPlotLines] = await Promise.all([
+  const [
+    existingCharacters,
+    existingScenes,
+    existingWorldview,
+    existingPlotLines,
+    existingPlotPoints,
+    existingInspirations,
+  ] = await Promise.all([
     characterRepository.list(bookId),
     sceneRepository.list(bookId),
     worldviewRepository.list(bookId),
     plotLineRepository.list(bookId),
+    plotPointRepository.list(bookId),
+    inspirationRepository.list(bookId),
   ]);
   const context = await buildAIContext(bookId, bookTitle, synopsis);
 
@@ -915,6 +938,8 @@ export async function executeChapterArchitectureSync(
             existingScenes,
             existingWorldview,
             existingPlotLines,
+            existingPlotPoints,
+            existingInspirations,
           );
           const total = summary.characters + summary.scenes + summary.plotPoints + summary.worldview + summary.inspirations;
           if (total > 0) {
@@ -947,6 +972,8 @@ async function insertChapterArchitecture(
   existingScenes: Scene[],
   existingWorldview: Array<{ id: string; title: string }>,
   existingPlotLines: PlotLine[],
+  existingPlotPoints: PlotPoint[],
+  existingInspirations: Inspiration[],
 ): Promise<ChapterArchitectureInsertSummary> {
   const summary: ChapterArchitectureInsertSummary = {
     characters: 0,
@@ -959,6 +986,10 @@ async function insertChapterArchitecture(
   const sceneMap = byName(existingScenes);
   const worldviewMap = byTitle(existingWorldview);
   const plotLineMap = byTitle(existingPlotLines);
+  const plotPointKeys = new Set(
+    existingPlotPoints.map((point) => `${point.chapterId ?? ''}::${point.title}`),
+  );
+  const inspirationTitles = new Set(existingInspirations.map((item) => item.title));
 
   for (const item of result.characters ?? []) {
     const name = String(item.name ?? '').trim();
@@ -999,13 +1030,33 @@ async function insertChapterArchitecture(
 
   for (const item of result.scenes ?? []) {
     const name = String(item.name ?? '').trim();
-    if (!name || sceneMap.has(name)) continue;
+    if (!name) continue;
     const characterIds = uniqueStrings(item.characterNames, 8)
       .map((name) => characterMap.get(name)?.id)
       .filter((id): id is string => Boolean(id));
     const worldviewEntryIds = uniqueStrings(item.worldviewTitles, 8)
       .map((title) => worldviewMap.get(title)?.id)
       .filter((id): id is string => Boolean(id));
+    const existing = sceneMap.get(name);
+    if (existing) {
+      const nextChapterIds = mergeStrings(existing.chapterIds, [chapterId]);
+      const nextCharacterIds = mergeStrings(existing.characterIds, characterIds);
+      const nextWorldviewIds = mergeStrings(existing.worldviewEntryIds, worldviewEntryIds);
+      const changed =
+        nextChapterIds.length !== existing.chapterIds.length ||
+        nextCharacterIds.length !== existing.characterIds.length ||
+        nextWorldviewIds.length !== existing.worldviewEntryIds.length;
+      if (changed) {
+        const updated = await sceneRepository.update(existing.id, {
+          chapterIds: nextChapterIds,
+          characterIds: nextCharacterIds,
+          worldviewEntryIds: nextWorldviewIds,
+        });
+        sceneMap.set(updated.name, updated);
+        summary.scenes++;
+      }
+      continue;
+    }
     const created = await sceneRepository.create({
       bookId,
       name,
@@ -1035,6 +1086,8 @@ async function insertChapterArchitecture(
   for (const [index, item] of (result.plotPoints ?? []).entries()) {
     const title = String(item.title ?? '').trim();
     if (!title) continue;
+    const pointKey = `${chapterId}::${title}`;
+    if (plotPointKeys.has(pointKey)) continue;
     const plotLine = item.plotLineTitle
       ? plotLineMap.get(String(item.plotLineTitle))
       : undefined;
@@ -1051,12 +1104,13 @@ async function insertChapterArchitecture(
       order: Number.isFinite(item.order) ? Number(item.order) : index,
       timelineOrder: Number.isFinite(item.timelineOrder) ? Number(item.timelineOrder) : index,
     });
+    plotPointKeys.add(pointKey);
     summary.plotPoints++;
   }
 
   for (const item of result.inspirations ?? []) {
     const title = String(item.title ?? '').trim();
-    if (!title) continue;
+    if (!title || inspirationTitles.has(title)) continue;
     await inspirationRepository.create({
       bookId,
       title,
@@ -1064,6 +1118,7 @@ async function insertChapterArchitecture(
       tags: uniqueStrings(item.tags, 8),
       category: String(item.category ?? '章节分析'),
     });
+    inspirationTitles.add(title);
     summary.inspirations++;
   }
 
