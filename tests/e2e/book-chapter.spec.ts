@@ -47,13 +47,14 @@ test.describe('作品 + 章节 UI 全流程', () => {
     }, { authToken: token, user: regBody.user, bookId: book.id });
 
     await page.goto('/plot', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: '剧情' })).toBeVisible();
+    const main = page.getByRole('main');
+    await expect(main.getByRole('heading', { name: '剧情', exact: true })).toBeVisible();
 
     await page.getByTitle('工作台').click();
     await page.waitForTimeout(120);
     await expect(page.getByLabel('页面加载中')).toHaveCount(0);
     await expect(page.getByRole('status', { name: '加载中' })).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: '工作台' })).toBeVisible();
+    await expect(main.getByRole('heading', { name: '工作台', exact: true })).toBeVisible();
   });
 
   test('创建作品 → 编辑章节 → 验证内容持久化', async ({ page }) => {

@@ -8,42 +8,31 @@
  * - 各模块支持子路由参数（如 /characters/:id、/worldview/:categoryId/:entryId 等）
  *
  * 路由采用 createBrowserRouter + RouterProvider。
- * 页面组件通过 React.lazy 懒加载，Suspense 边界挂在 AppLayout 的 outlet 处。
+ * 页面组件静态导入，避免工作台内模块切换时出现异步加载占位闪烁。
  * 全局快捷键 useKeyboardShortcuts 在 AppLayout（Router 上下文内）注册，
  * 因其内部使用 useNavigate，必须在 RouterProvider 提供的上下文中调用。
  *
  * 认证：应用启动时调用 useUserStore.hydrate() 从 localStorage 恢复登录态；
  * 除 /login 外的所有路由由 RequireAuth 包裹，未登录将重定向至 /login。
  */
-import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
 import { RequireAuth } from './components/RequireAuth';
 import { useUserStore } from './stores/userStore';
-
-const AuthPage = lazy(() => import('./pages/AuthPage'));
-const DashboardPage = lazy(() => import('./pages/DashboardPage'));
-const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
-const WorldviewPage = lazy(() => import('./pages/WorldviewPage'));
-const CharactersPage = lazy(() => import('./pages/CharactersPage'));
-const PlotPage = lazy(() => import('./pages/PlotPage'));
-const ScenesPage = lazy(() => import('./pages/ScenesPage'));
-const SceneDetailPage = lazy(() => import('./pages/SceneDetailPage'));
-const EditorPage = lazy(() => import('./pages/EditorPage'));
-const InspirationPage = lazy(() => import('./pages/InspirationPage'));
-const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+import AuthPage from './pages/AuthPage';
+import DashboardPage from './pages/DashboardPage';
+import ProjectsPage from './pages/ProjectsPage';
+import WorldviewPage from './pages/WorldviewPage';
+import CharactersPage from './pages/CharactersPage';
+import PlotPage from './pages/PlotPage';
+import ScenesPage from './pages/ScenesPage';
+import SceneDetailPage from './pages/SceneDetailPage';
+import EditorPage from './pages/EditorPage';
+import InspirationPage from './pages/InspirationPage';
+import SettingsPage from './pages/SettingsPage';
 
 // 应用启动时从 localStorage 恢复认证态（同步操作，先于路由渲染执行）
 useUserStore.getState().hydrate();
-
-/** 路由懒加载时的轻量占位 */
-function RouteLoading() {
-  return (
-    <div className="flex h-screen items-center justify-center bg-background">
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-primary" />
-    </div>
-  );
-}
 
 /** 根路径重定向：已登录 → /dashboard，未登录 → /login */
 function RootRedirect() {
@@ -55,11 +44,7 @@ const router = createBrowserRouter([
   // 认证页：不进入 AppLayout，不需要登录
   {
     path: '/login',
-    element: (
-      <Suspense fallback={<RouteLoading />}>
-        <AuthPage />
-      </Suspense>
-    ),
+    element: <AuthPage />,
   },
   {
     path: '/',
