@@ -7,7 +7,7 @@
  * 主区使用 AnimatePresence + Framer Motion 实现路由切换过渡（淡入 + Y 轴位移）。
  * 全局搜索面板在此挂载，覆盖所有路由。
  */
-import { Suspense } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useLocation, useOutlet } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import Sidebar from './Sidebar';
@@ -15,15 +15,29 @@ import Topbar from './Topbar';
 import MobileTabBar from './MobileTabBar';
 import GlobalSearch from '../GlobalSearch';
 import { ToastContainer } from '../feedback/Toast';
-import { Skeleton } from '../ui/Skeleton';
 import { useKeyboardShortcuts } from '../../hooks';
 import { useToastStore, useBookStore } from '../../stores';
 
+const ROUTE_LOADING_DELAY_MS = 220;
+
 /** 路由懒加载时的占位组件 */
 function PageLoading() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setVisible(true), ROUTE_LOADING_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  if (!visible) return null;
+
   return (
-    <div className="flex h-full items-center justify-center p-8">
-      <Skeleton width="100%" height="100%" className="max-h-24" />
+    <div className="flex h-full items-center justify-center p-8" aria-live="polite">
+      <div
+        role="status"
+        aria-label="页面加载中"
+        className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary motion-reduce:animate-none"
+      />
     </div>
   );
 }

@@ -14,6 +14,48 @@ function uniqueUsername(prefix = 'crud'): string {
 }
 
 test.describe('作品 + 章节 UI 全流程', () => {
+  test('左侧菜单切换到工作台不闪灰色骨架', async ({ page, request }) => {
+    const username = uniqueUsername('nav');
+    const regRes = await request.post('http://localhost:8787/api/auth/register', {
+      data: { username, password: 'test123456', displayName: 'Nav Tester' },
+    });
+    expect(regRes.ok()).toBeTruthy();
+    const regBody = await regRes.json();
+    const token = regBody.token;
+    const headers = { Authorization: `Bearer ${token}` };
+
+    const bookRes = await request.post('http://localhost:8787/api/books', {
+      headers,
+      data: {
+        title: `导航测试_${Date.now().toString(36)}`,
+        synopsis: '验证菜单切换时不显示整块灰色骨架。',
+        genre: 'fantasy',
+        targetWords: 10000,
+        dailyGoal: 500,
+      },
+    });
+    expect(bookRes.ok()).toBeTruthy();
+    const book = await bookRes.json();
+
+    await page.addInitScript(({ authToken, user, bookId }) => {
+      localStorage.setItem('scribe-token', authToken);
+      localStorage.setItem('scribe-user', JSON.stringify(user));
+      localStorage.setItem('scribe-book', JSON.stringify({
+        state: { currentBookId: bookId },
+        version: 0,
+      }));
+    }, { authToken: token, user: regBody.user, bookId: book.id });
+
+    await page.goto('/plot', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: '剧情' })).toBeVisible();
+
+    await page.getByTitle('工作台').click();
+    await page.waitForTimeout(120);
+    await expect(page.getByLabel('页面加载中')).toHaveCount(0);
+    await expect(page.getByRole('status', { name: '加载中' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: '工作台' })).toBeVisible();
+  });
+
   test('创建作品 → 编辑章节 → 验证内容持久化', async ({ page }) => {
     const username = uniqueUsername();
     const password = 'test123456';
