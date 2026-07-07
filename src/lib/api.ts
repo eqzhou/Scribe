@@ -8,6 +8,7 @@
  *
  * 同源部署，路径以 /api 开头，由 vite 代理或后端静态托管。
  */
+import { apiPath, isLoginPath, withAppBasePath } from './appBase';
 
 /** localStorage 中保存 JWT token 的 key */
 const TOKEN_KEY = 'scribe-token';
@@ -28,8 +29,8 @@ function handleUnauthorized(): void {
   } catch {
     // 忽略 localStorage 不可用错误
   }
-  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-    window.location.href = '/login';
+  if (typeof window !== 'undefined' && !isLoginPath()) {
+    window.location.href = withAppBasePath('/login');
   }
 }
 
@@ -97,7 +98,7 @@ async function request<T>(
 
   let res: Response;
   try {
-    res = await fetch(path, init);
+    res = await fetch(apiPath(path), init);
   } catch (err) {
     // 网络层错误（DNS、断网、CORS 失败等）
     throw new Error(

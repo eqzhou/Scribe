@@ -63,6 +63,36 @@ test.describe('API 路径契约验证', () => {
     }
   });
 
+  test('子路径部署静态资源、SPA fallback 与 API 别名可访问', async ({ request }) => {
+    const redirect = await request.get('/Scribe', { maxRedirects: 0 });
+    expect(redirect.status()).toBe(308);
+    expect(redirect.headers().location).toBe('/Scribe/');
+
+    const landing = await request.get('/Scribe/');
+    expect(landing.ok(), `GET /Scribe/ 应返回 2xx，实际 ${landing.status()}`).toBeTruthy();
+    const landingHtml = await landing.text();
+    expect(landingHtml).toContain('data-app-path="/login"');
+    expect(landingHtml).toContain('src="hero-screenshot.jpg"');
+
+    for (const path of ['/Scribe/hero-screenshot.jpg', '/Scribe/hero-screenshot-dark.jpg']) {
+      const res = await request.get(path);
+      expect(res.ok(), `GET ${path} 应返回 2xx，实际 ${res.status()}`).toBeTruthy();
+      expect(res.headers()['content-type']).toContain('image/jpeg');
+      expect(Number(res.headers()['content-length'] ?? 0), `${path} 不应为空文件`).toBeGreaterThan(0);
+    }
+
+    const loginPage = await request.get('/Scribe/login?tab=register');
+    expect(loginPage.ok(), `GET /Scribe/login 应返回 SPA，实际 ${loginPage.status()}`).toBeTruthy();
+    const loginHtml = await loginPage.text();
+    expect(loginHtml).toContain('/Scribe/assets/');
+    expect(loginHtml).not.toContain('src="/assets/');
+    expect(loginHtml).not.toContain('href="/assets/');
+
+    const apiAlias = await request.get('/Scribe/api/auth/me');
+    expect(apiAlias.status()).toBe(401);
+    expect(apiAlias.headers()['content-type']).toContain('application/json');
+  });
+
   test('所有实体 collection 端点返回 200 + JSON 数组', async ({ request }) => {
     const { headers, bookId } = await setupUserAndBook(request);
 

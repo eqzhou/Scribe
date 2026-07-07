@@ -18,6 +18,7 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
 import { RequireAuth } from './components/RequireAuth';
+import { getAppBasePath } from './lib/appBase';
 import { useUserStore } from './stores/userStore';
 import AuthPage from './pages/AuthPage';
 import DashboardPage from './pages/DashboardPage';
@@ -79,7 +80,9 @@ const router = createBrowserRouter([
       { path: 'settings', element: <SettingsPage /> },
     ],
   },
-]);
+], {
+  basename: getAppBasePath() || undefined,
+});
 
 function App() {
   return <RouterProvider router={router} />;

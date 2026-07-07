@@ -14,6 +14,45 @@ function uniqueUsername(prefix = 'crud'): string {
 }
 
 test.describe('作品 + 章节 UI 全流程', () => {
+  test('子路径部署下顶部图标返回 /Scribe 首页', async ({ page, request }) => {
+    const username = uniqueUsername('sp');
+    const regRes = await request.post('http://localhost:8787/Scribe/api/auth/register', {
+      data: { username, password: 'test123456', displayName: 'Subpath Tester' },
+    });
+    expect(regRes.ok()).toBeTruthy();
+    const regBody = await regRes.json();
+    const token = regBody.token;
+    const headers = { Authorization: `Bearer ${token}` };
+
+    const bookRes = await request.post('http://localhost:8787/Scribe/api/books', {
+      headers,
+      data: {
+        title: `子路径导航_${Date.now().toString(36)}`,
+        synopsis: '验证 /Scribe 子路径部署下顶部图标不会跳到域名根。',
+      },
+    });
+    expect(bookRes.ok()).toBeTruthy();
+    const book = await bookRes.json();
+
+    await page.addInitScript(({ authToken, user, bookId }) => {
+      localStorage.setItem('scribe-token', authToken);
+      localStorage.setItem('scribe-user', JSON.stringify(user));
+      localStorage.setItem('scribe-book', JSON.stringify({
+        state: { currentBookId: bookId },
+        version: 0,
+      }));
+    }, { authToken: token, user: regBody.user, bookId: book.id });
+
+    await page.goto('/Scribe/worldview', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('main').getByRole('heading', { name: '世界观', exact: true })).toBeVisible();
+
+    const homeLink = page.getByRole('link', { name: '返回首页' });
+    await expect(homeLink).toHaveAttribute('href', /\/Scribe\/$/);
+    await homeLink.click();
+    await page.waitForURL('**/Scribe/', { timeout: 10000 });
+    await expect(page.locator('#hero-screenshot-img')).toBeVisible();
+  });
+
   test('左侧菜单切换到工作台不闪灰色骨架', async ({ page, request }) => {
     const username = uniqueUsername('nav');
     const regRes = await request.post('http://localhost:8787/api/auth/register', {

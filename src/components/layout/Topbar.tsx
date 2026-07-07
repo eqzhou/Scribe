@@ -13,6 +13,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Search, Download, Sun, Moon, Settings, ChevronDown, LogOut, Feather, Library } from 'lucide-react';
 import { useBookStore, useUIStore, useToastStore, useUserStore } from '../../stores';
 import type { ThemeMode } from '../../types';
+import { withAppBasePath } from '../../lib/appBase';
 import { exportBook, downloadJson } from '../../lib/exporter';
 import { cn } from '../../utils/cn';
 
@@ -133,7 +134,7 @@ export default function Topbar() {
     >
       {/* 品牌图标：点击回到首页 */}
       <a
-        href="/"
+        href={withAppBasePath('/')}
         className="group flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-secondary/40 bg-secondary/10 text-primary transition-all duration-200 hover:border-primary hover:bg-primary/15 hover:shadow-soft"
         title="返回首页"
         aria-label="返回首页"

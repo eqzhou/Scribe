@@ -6,12 +6,10 @@
  * - POST /api/auth/login     登录
  * - GET  /api/auth/me        获取当前用户（需 Bearer token）
  *
- * 同源部署，API_BASE 留空。
+ * 同源部署，API 路径通过 appBase 自动适配根路径或 /Scribe 子路径。
  */
 import type { AuthResponse, User } from '../types';
-
-/** API 基础地址（同源留空） */
-const API_BASE = '';
+import { apiPath } from './appBase';
 
 /**
  * 注册新用户
@@ -25,7 +23,7 @@ export async function register(
   password: string,
   displayName?: string,
 ): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE}/api/auth/register`, {
+  const res = await fetch(apiPath('/api/auth/register'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password, displayName }),
@@ -44,7 +42,7 @@ export async function register(
  * @param password 密码
  */
 export async function login(username: string, password: string): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE}/api/auth/login`, {
+  const res = await fetch(apiPath('/api/auth/login'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
@@ -62,7 +60,7 @@ export async function login(username: string, password: string): Promise<AuthRes
  * @param token Bearer token
  */
 export async function fetchCurrentUser(token: string): Promise<User> {
-  const res = await fetch(`${API_BASE}/api/auth/me`, {
+  const res = await fetch(apiPath('/api/auth/me'), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error('token 无效');

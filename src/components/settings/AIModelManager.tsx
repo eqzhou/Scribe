@@ -17,6 +17,7 @@ import { useAIModelStore, PROVIDER_META } from '../../stores/aiModelStore';
 import { useToastStore } from '../../stores';
 import type { AIModel } from '../../types';
 import { Button, ConfirmDialog } from '../ui';
+import { apiPath } from '../../lib/appBase';
 import { cn } from '../../utils/cn';
 import { defaultFormState, type FormState } from './constants';
 import { ModelCard } from './ModelCard';
@@ -152,7 +153,7 @@ export function AIModelManager() {
     const timeoutId = window.setTimeout(() => controller.abort(), 20000);
     try {
       const token = localStorage.getItem('scribe-token') ?? '';
-      const res = await fetch('/api/ai/test', {
+      const res = await fetch(apiPath('/api/ai/test'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

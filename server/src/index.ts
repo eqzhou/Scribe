@@ -36,32 +36,46 @@ const app = express();
 const PORT = Number(process.env.PORT ?? 8787);
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN ?? 'http://localhost:5173';
 
+function normalizeBasePath(value: string | undefined): string {
+  if (!value) return '';
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === '/') return '';
+  const withLeadingSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return withLeadingSlash.replace(/\/+$/, '');
+}
+
+// 线上当前挂载在 /Scribe；仍保留根路径，保证本地与根部署不受影响。
+const APP_BASE_PATH = normalizeBasePath(process.env.APP_BASE_PATH ?? '/Scribe');
+const mountPaths = (pathPrefix: string): string[] => (
+  APP_BASE_PATH ? [pathPrefix, `${APP_BASE_PATH}${pathPrefix}`] : [pathPrefix]
+);
+
 // CORS：仅允许配置的前端来源（生产模式下前后端同源，CORS 不会触发）
 app.use(cors({ origin: ALLOWED_ORIGIN }));
 // 请求体大小限制 5MB（支持大段文本生成）
 app.use(express.json({ limit: '5mb' }));
 
 // 认证路由（无需认证）
-app.use('/api/auth', authRouter);
+app.use(mountPaths('/api/auth'), authRouter);
 
 // 其余 /api/* 路由全部应用 requireAuth 中间件
-app.use('/api/ai', requireAuth, aiRouter);
-app.use('/api', requireAuth, modelRouter);
-app.use('/api', requireAuth, booksRouter);
-app.use('/api', requireAuth, volumesRouter);
-app.use('/api', requireAuth, chaptersRouter);
-app.use('/api', requireAuth, charactersRouter);
-app.use('/api', requireAuth, relationsRouter);
-app.use('/api', requireAuth, worldviewRouter);
-app.use('/api', requireAuth, scenesRouter);
-app.use('/api', requireAuth, plotLinesRouter);
-app.use('/api', requireAuth, plotPointsRouter);
-app.use('/api', requireAuth, foreshadowingRouter);
-app.use('/api', requireAuth, inspirationRouter);
-app.use('/api', requireAuth, writingLogsRouter);
+app.use(mountPaths('/api/ai'), requireAuth, aiRouter);
+app.use(mountPaths('/api'), requireAuth, modelRouter);
+app.use(mountPaths('/api'), requireAuth, booksRouter);
+app.use(mountPaths('/api'), requireAuth, volumesRouter);
+app.use(mountPaths('/api'), requireAuth, chaptersRouter);
+app.use(mountPaths('/api'), requireAuth, charactersRouter);
+app.use(mountPaths('/api'), requireAuth, relationsRouter);
+app.use(mountPaths('/api'), requireAuth, worldviewRouter);
+app.use(mountPaths('/api'), requireAuth, scenesRouter);
+app.use(mountPaths('/api'), requireAuth, plotLinesRouter);
+app.use(mountPaths('/api'), requireAuth, plotPointsRouter);
+app.use(mountPaths('/api'), requireAuth, foreshadowingRouter);
+app.use(mountPaths('/api'), requireAuth, inspirationRouter);
+app.use(mountPaths('/api'), requireAuth, writingLogsRouter);
 
 // API 未匹配时始终返回 JSON，避免前端把 Express 默认 HTML 404 作为错误正文展示。
-app.use('/api', (_req, res) => {
+app.use(mountPaths('/api'), (_req, res) => {
   res.status(404).json({ error: '接口不存在' });
 });
 
@@ -72,7 +86,7 @@ const STATIC_ROOT = path.resolve(__dirname, '..', '..', 'dist');
 const PUBLIC_ROOT = path.resolve(__dirname, '..', '..', 'public');
 
 // 静态资源（带 hash 的 js/css/图片等）
-app.use('/assets', express.static(path.join(STATIC_ROOT, 'assets'), {
+app.use(mountPaths('/assets'), express.static(path.join(STATIC_ROOT, 'assets'), {
   immutable: true,
   maxAge: '1y',
 }));
@@ -87,18 +101,63 @@ app.use(express.static(PUBLIC_ROOT, {
   maxAge: '1h',
   index: false,
 }));
+if (APP_BASE_PATH) {
+  app.use(APP_BASE_PATH, express.static(STATIC_ROOT, {
+    maxAge: '1h',
+    index: false,
+    redirect: false,
+  }));
+  app.use(APP_BASE_PATH, express.static(PUBLIC_ROOT, {
+    maxAge: '1h',
+    index: false,
+    redirect: false,
+  }));
+}
+
+if (APP_BASE_PATH) {
+  app.get(APP_BASE_PATH, (req, res, next) => {
+    if (req.originalUrl === APP_BASE_PATH) {
+      res.redirect(308, `${APP_BASE_PATH}/`);
+      return;
+    }
+    next();
+  });
+}
 
 // 根路径直接返回落地页
-app.get('/', (_req, res, next) => {
+app.get(APP_BASE_PATH ? ['/', `${APP_BASE_PATH}/`] : '/', (_req, res, next) => {
   res.sendFile(path.join(STATIC_ROOT, 'landing.html'), (err) => {
     if (err) next(err);
   });
 });
 
-// SPA fallback：所有未匹配的 GET 请求统一返回 index.html，交由前端路由处理
-const spaFallback: RequestHandler = (_req, res, next) => {
-  res.sendFile(path.join(STATIC_ROOT, 'index.html'), (err) => {
-    if (err) next(err);
+function isSubpathRequest(pathname: string): boolean {
+  return !!APP_BASE_PATH && (pathname === APP_BASE_PATH || pathname.startsWith(`${APP_BASE_PATH}/`));
+}
+
+function prefixAssetPathsForSubpath(html: string): string {
+  if (!APP_BASE_PATH) return html;
+  return html.replace(/(src|href)="\/assets\//g, `$1="${APP_BASE_PATH}/assets/`);
+}
+
+// SPA fallback：所有未匹配的 GET 请求统一返回 index.html，交由前端路由处理。
+// /Scribe/* 子路径部署时，动态把 Vite 产物里的 /assets 改成 /Scribe/assets，
+// 避免资源请求落到域名根路径的其它应用。
+const spaFallback: RequestHandler = (req, res, next) => {
+  const indexPath = path.join(STATIC_ROOT, 'index.html');
+  if (!isSubpathRequest(req.path)) {
+    res.sendFile(indexPath, (err) => {
+      if (err) next(err);
+    });
+    return;
+  }
+
+  fs.readFile(indexPath, 'utf8', (err, html) => {
+    if (err) {
+      next(err);
+      return;
+    }
+    res.type('html').send(prefixAssetPathsForSubpath(html));
   });
 };
 app.get('*', spaFallback);

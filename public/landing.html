@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scribe — 专业小说创作系统</title>
     <meta name="description" content="专业小说创作系统。六大核心模块互联,AI 懂你的故事。数据安全存储,按用户隔离。" />
-    <link rel="icon" href="/favicon.svg" />
+    <link rel="icon" href="favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -298,7 +298,7 @@
       <nav class="fixed top-0 left-0 right-0 z-50" style="background: var(--color-bg); border-bottom: 1px solid var(--color-border-subtle);">
         <div class="w-full px-6 flex items-center justify-between" style="height: 64px;">
           <!-- Logo -->
-          <a href="/" class="flex items-center gap-2 no-underline" style="color: var(--color-text);">
+          <a href="/" data-app-path="/" class="flex items-center gap-2 no-underline" style="color: var(--color-text);">
             <span class="flex items-center justify-center" style="width: 28px; height: 28px; background: var(--color-primary); border-radius: var(--radius-md);">
               <i data-lucide="feather" style="width: 16px; height: 16px; color: var(--color-text-inverse);"></i>
             </span>
@@ -317,8 +317,8 @@
               <i data-lucide="moon" id="theme-icon-dark" style="width: 16px; height: 16px; display: none;"></i>
             </button>
             <!-- 未登录:登录/注册按钮 -->
-            <a id="nav-login" href="/login" class="scribe-btn-secondary" style="padding: 7px 14px; font-size: 13px;">登录</a>
-            <a id="nav-register" href="/login?tab=register" class="scribe-btn-primary" style="padding: 7px 14px; font-size: 13px;">注册</a>
+            <a id="nav-login" href="/login" data-app-path="/login" class="scribe-btn-secondary" style="padding: 7px 14px; font-size: 13px;">登录</a>
+            <a id="nav-register" href="/login?tab=register" data-app-path="/login?tab=register" class="scribe-btn-primary" style="padding: 7px 14px; font-size: 13px;">注册</a>
             <!-- 已登录:用户头像 + 下拉菜单 -->
             <div id="nav-user" class="relative" style="display: none;">
               <button id="user-menu-btn" class="flex items-center gap-2 rounded-full" style="padding: 4px 10px 4px 4px; border: 1px solid var(--color-border); background: transparent; cursor: pointer; transition: background 0.15s;" onmouseover="this.style.background='var(--color-bg-secondary)'" onmouseout="this.style.background='transparent'">
@@ -327,10 +327,10 @@
                 <i data-lucide="chevron-down" style="width: 14px; height: 14px; color: var(--color-text-tertiary);"></i>
               </button>
               <div id="user-menu" class="absolute right-0 mt-2 rounded-lg border overflow-hidden" style="display: none; top: 100%; min-width: 160px; background: var(--color-surface); border-color: var(--color-border); box-shadow: var(--shadow-md);">
-                <a href="/projects" class="flex items-center gap-2 px-4 py-2.5 no-underline" style="color: var(--color-text-secondary); font-family: 'Inter', system-ui, sans-serif; font-size: 13px;" onmouseover="this.style.background='var(--color-bg-secondary)'; this.style.color='var(--color-text)'" onmouseout="this.style.background='transparent'; this.style.color='var(--color-text-secondary)'">
+                <a href="/projects" data-app-path="/projects" class="flex items-center gap-2 px-4 py-2.5 no-underline" style="color: var(--color-text-secondary); font-family: 'Inter', system-ui, sans-serif; font-size: 13px;" onmouseover="this.style.background='var(--color-bg-secondary)'; this.style.color='var(--color-text)'" onmouseout="this.style.background='transparent'; this.style.color='var(--color-text-secondary)'">
                   <i data-lucide="library" style="width: 14px; height: 14px;"></i> 我的项目
                 </a>
-                <a href="/settings" class="flex items-center gap-2 px-4 py-2.5 no-underline" style="color: var(--color-text-secondary); font-family: 'Inter', system-ui, sans-serif; font-size: 13px;" onmouseover="this.style.background='var(--color-bg-secondary)'; this.style.color='var(--color-text)'" onmouseout="this.style.background='transparent'; this.style.color='var(--color-text-secondary)'">
+                <a href="/settings" data-app-path="/settings" class="flex items-center gap-2 px-4 py-2.5 no-underline" style="color: var(--color-text-secondary); font-family: 'Inter', system-ui, sans-serif; font-size: 13px;" onmouseover="this.style.background='var(--color-bg-secondary)'; this.style.color='var(--color-text)'" onmouseout="this.style.background='transparent'; this.style.color='var(--color-text-secondary)'">
                   <i data-lucide="settings" style="width: 14px; height: 14px;"></i> 设置
                 </a>
                 <div style="border-top: 1px solid var(--color-border);"></div>
@@ -358,7 +358,7 @@
             专业小说创作系统。六大核心模块互联,AI 懂你的故事。数据安全存储,按用户隔离。
           </p>
           <div class="flex items-center justify-center gap-4 mt-10">
-            <a id="hero-cta" href="/login?tab=register" class="scribe-btn-primary" style="padding: 12px 24px;">
+            <a id="hero-cta" href="/login?tab=register" data-app-path="/login?tab=register" class="scribe-btn-primary" style="padding: 12px 24px;">
               <i data-lucide="pen-line" style="width: 16px; height: 16px;"></i>
               <span id="hero-cta-text">免费开始写作</span>
             </a>
@@ -522,7 +522,7 @@
             免费注册,立即开始。你的故事值得被好好书写。
           </p>
           <div class="flex items-center justify-center gap-4 mt-10">
-            <a id="final-cta" href="/login?tab=register" class="scribe-btn-primary" style="padding: 14px 28px; font-size: 16px;">
+            <a id="final-cta" href="/login?tab=register" data-app-path="/login?tab=register" class="scribe-btn-primary" style="padding: 14px 28px; font-size: 16px;">
               <i data-lucide="pen-line" style="width: 18px; height: 18px;"></i>
               <span id="final-cta-text">免费开始</span>
             </a>
@@ -670,8 +670,17 @@
         return base + path;
       }
 
+      function applyAppLinks() {
+        var links = document.querySelectorAll('[data-app-path]');
+        links.forEach(function(link) {
+          var path = link.getAttribute('data-app-path') || '/';
+          link.setAttribute('href', appPath(path));
+        });
+      }
+
       // 初始化：应用明暗 + 色彩主题
       (function() {
+        applyAppLinks();
         if (currentMode === 'dark') {
           document.documentElement.classList.add('dark');
         }

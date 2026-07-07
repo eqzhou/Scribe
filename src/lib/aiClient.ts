@@ -27,6 +27,7 @@ import type {
   OnStreamDone,
   OnStreamError,
 } from '../types/ai';
+import { apiPath, isLoginPath, withAppBasePath } from './appBase';
 
 /** 后端 AI 路由前缀 */
 const AI_BASE = '/api/ai';
@@ -54,7 +55,7 @@ async function streamRequest(
 ): Promise<void> {
   try {
     const token = localStorage.getItem('scribe-token') ?? '';
-    const res = await fetch(`${AI_BASE}${endpoint}`, {
+    const res = await fetch(apiPath(`${AI_BASE}${endpoint}`), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -66,8 +67,8 @@ async function streamRequest(
 
     if (res.status === 401) {
       localStorage.removeItem('scribe-token');
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+      if (!isLoginPath()) {
+        window.location.href = withAppBasePath('/login');
       }
       throw new Error('登录已失效，请重新登录');
     }

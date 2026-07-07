@@ -42,6 +42,19 @@ test.describe('认证流程', () => {
     await expect(page.locator('label:has-text("显示名")')).toBeVisible();
   });
 
+  test('子路径部署落地页链接与登录路由保留 /Scribe 前缀', async ({ page }) => {
+    await page.goto('/Scribe/', { waitUntil: 'domcontentloaded' });
+
+    await expect(page.locator('nav a#nav-login')).toHaveAttribute('href', /\/Scribe\/login$/);
+    await expect(page.locator('nav a#nav-register')).toHaveAttribute('href', /\/Scribe\/login\?tab=register$/);
+    await expect(page.locator('#hero-cta')).toHaveAttribute('href', /\/Scribe\/login\?tab=register$/);
+
+    await page.goto('/Scribe/login?tab=register', { waitUntil: 'domcontentloaded' });
+    const registerTab = page.locator('button[role="tab"]:has-text("注册")');
+    await expect(registerTab).toHaveAttribute('aria-selected', 'true');
+    expect(page.url()).toContain('/Scribe/login?tab=register');
+  });
+
   test('完整注册→登录→登出流程', async ({ page }) => {
     const username = uniqueUsername('auth');
     const password = 'test123456';
