@@ -27,6 +27,7 @@ import type {
   OnStreamDone,
   OnStreamError,
 } from '../types/ai';
+import { z } from 'zod';
 import { apiPath, isLoginPath, withAppBasePath } from './appBase';
 
 /** 后端 AI 路由前缀 */
@@ -237,49 +238,155 @@ function parseJsonOrFallback<T>(raw: string, fallback: T): T {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+const titleSchema = z.string().trim().min(1).max(120);
+const textSchema = z.string().trim().min(1).max(5000);
+const optionalReferenceSchema = z.string().trim().max(120).optional();
+const tagsSchema = z.array(z.string().trim().min(1).max(50)).max(8);
+const characterRoleSchema = z.enum(['protagonist', 'supporting', 'antagonist', 'minor']);
+const worldviewCategorySchema = z.enum(['geography', 'history', 'faction', 'system', 'culture', 'item']);
 
-function isRecordArray(value: unknown): boolean {
-  return Array.isArray(value) && value.every(isRecord);
-}
+const projectBlueprintSchema = z.object({
+  worldview: z.array(z.object({
+    category: worldviewCategorySchema,
+    title: titleSchema,
+    content: textSchema,
+    tags: tagsSchema,
+  })).min(1).max(12),
+  characters: z.array(z.object({
+    name: titleSchema,
+    alias: z.string().trim().max(120).optional(),
+    faction: z.string().trim().max(120).optional(),
+    role: characterRoleSchema,
+    appearance: textSchema,
+    personality: textSchema,
+    background: textSchema,
+    arc: textSchema,
+    tags: tagsSchema,
+    relatedWorldviewTitles: z.array(titleSchema).max(8),
+  })).min(1).max(12),
+  scenes: z.array(z.object({
+    name: titleSchema,
+    description: textSchema,
+    atmosphere: tagsSchema,
+    characterNames: z.array(titleSchema).max(8),
+    worldviewTitles: z.array(titleSchema).max(8),
+    chapterTitles: z.array(titleSchema).max(8),
+  })).min(1).max(16),
+  plotLines: z.array(z.object({
+    title: titleSchema,
+    type: z.enum(['main', 'sub']),
+    synopsis: textSchema,
+    status: z.literal('planning'),
+    order: z.number().int().min(0).max(1000),
+  })).min(1).max(4),
+  plotPoints: z.array(z.object({
+    plotLineTitle: titleSchema,
+    title: titleSchema,
+    description: textSchema,
+    chapterTitle: optionalReferenceSchema,
+    characterNames: z.array(titleSchema).max(8),
+    order: z.number().int().min(0).max(1000),
+    timelineOrder: z.number().int().min(0).max(1000),
+  })).min(1).max(24),
+  inspirations: z.array(z.object({
+    title: titleSchema,
+    content: textSchema,
+    tags: tagsSchema,
+    category: z.string().trim().min(1).max(80),
+  })).min(1).max(16),
+  foreshadowing: z.array(z.object({
+    title: titleSchema,
+    description: textSchema,
+    setupChapterTitle: optionalReferenceSchema,
+    payoffChapterTitle: optionalReferenceSchema,
+    status: z.literal('pending').optional(),
+  })).min(1).max(12),
+  chapters: z.array(z.object({
+    title: titleSchema,
+    summary: textSchema,
+    outline: textSchema,
+    order: z.number().int().min(0).max(1000),
+  })).min(1).max(32),
+}).superRefine((blueprint, ctx) => {
+  const chapterTitles = new Set(blueprint.chapters.map((chapter) => chapter.title));
+  const plotLineTitles = new Set(blueprint.plotLines.map((line) => line.title));
 
-/**
- * 仅接受具备约定数组字段的 JSON 对象，避免模型返回任意合法 JSON 后被误入库。
- */
-function parseStructuredJson<T>(
-  raw: string,
-  requiredArrayFields: readonly string[],
-): T | null {
-  const parsed = parseJsonOrFallback<unknown>(raw, null);
-  if (!isRecord(parsed)) return null;
-  if (!requiredArrayFields.every((field) => isRecordArray(parsed[field]))) return null;
-  return parsed as T;
-}
+  for (const [index, scene] of blueprint.scenes.entries()) {
+    for (const chapterTitle of scene.chapterTitles) {
+      if (!chapterTitles.has(chapterTitle)) {
+        ctx.addIssue({ code: 'custom', path: ['scenes', index, 'chapterTitles'], message: '场景引用了未知章节' });
+      }
+    }
+  }
+  for (const [index, point] of blueprint.plotPoints.entries()) {
+    if (!plotLineTitles.has(point.plotLineTitle)) {
+      ctx.addIssue({ code: 'custom', path: ['plotPoints', index, 'plotLineTitle'], message: '剧情节点引用了未知剧情线' });
+    }
+    if (point.chapterTitle && !chapterTitles.has(point.chapterTitle)) {
+      ctx.addIssue({ code: 'custom', path: ['plotPoints', index, 'chapterTitle'], message: '剧情节点引用了未知章节' });
+    }
+  }
+  for (const [index, foreshadowing] of blueprint.foreshadowing.entries()) {
+    for (const field of ['setupChapterTitle', 'payoffChapterTitle'] as const) {
+      const chapterTitle = foreshadowing[field];
+      if (chapterTitle && !chapterTitles.has(chapterTitle)) {
+        ctx.addIssue({ code: 'custom', path: ['foreshadowing', index, field], message: '伏笔引用了未知章节' });
+      }
+    }
+  }
+});
+
+const chapterArchitectureSchema = z.object({
+  chapterSummary: z.string().trim().min(1).max(4000),
+  characters: z.array(z.object({
+    name: titleSchema,
+    role: characterRoleSchema,
+    appearance: textSchema,
+    personality: textSchema,
+    background: textSchema,
+  })).max(12),
+  scenes: z.array(z.object({
+    name: titleSchema,
+    description: textSchema,
+    atmosphere: tagsSchema,
+    characterNames: z.array(titleSchema).max(8),
+    worldviewTitles: z.array(titleSchema).max(8),
+  })).max(12),
+  plotPoints: z.array(z.object({
+    plotLineTitle: optionalReferenceSchema,
+    title: titleSchema,
+    description: textSchema,
+    characterNames: z.array(titleSchema).max(8),
+    order: z.number().int().min(0).max(1000),
+    timelineOrder: z.number().int().min(0).max(1000),
+  })).max(12),
+  worldview: z.array(z.object({
+    category: worldviewCategorySchema,
+    title: titleSchema,
+    content: textSchema,
+    tags: tagsSchema,
+  })).max(12),
+  inspirations: z.array(z.object({
+    title: titleSchema,
+    content: textSchema,
+    tags: tagsSchema,
+    category: z.string().trim().min(1).max(80),
+  })).max(12),
+  foreshadowing: z.array(z.object({
+    title: titleSchema,
+    description: textSchema,
+    action: z.enum(['plant', 'payoff']),
+  })).max(12),
+});
 
 export function parseProjectBlueprintResult(raw: string): ProjectBlueprintResult | null {
-  return parseStructuredJson<ProjectBlueprintResult>(raw, [
-    'worldview',
-    'characters',
-    'scenes',
-    'plotLines',
-    'plotPoints',
-    'inspirations',
-    'foreshadowing',
-    'chapters',
-  ]);
+  const result = projectBlueprintSchema.safeParse(parseJsonOrFallback<unknown>(raw, null));
+  return result.success ? result.data : null;
 }
 
 export function parseChapterArchitectureResult(raw: string): ChapterArchitectureResult | null {
-  return parseStructuredJson<ChapterArchitectureResult>(raw, [
-    'characters',
-    'scenes',
-    'plotPoints',
-    'worldview',
-    'inspirations',
-    'foreshadowing',
-  ]);
+  const result = chapterArchitectureSchema.safeParse(parseJsonOrFallback<unknown>(raw, null));
+  return result.success ? result.data : null;
 }
 
 /**

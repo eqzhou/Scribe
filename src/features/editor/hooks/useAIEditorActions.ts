@@ -10,7 +10,7 @@
  * 同时托管风格选择弹窗、全文生成弹窗的开关状态与全文大纲文本，
  * 供主组件在 JSX 中渲染对应 Modal。
  */
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import type { Editor } from '@tiptap/react';
 import { bookRepository } from '../../../lib/repositories';
 import {
@@ -21,6 +21,7 @@ import {
 } from '../../../lib/aiTools';
 import { useAIStore, useToastStore } from '../../../stores';
 import type { RewriteStyle } from '../../../types/ai';
+import { AI_GHOST_ACCEPTED_META, isFulltextGhostAcceptance } from '../nodes/AIGhostText';
 
 export interface StyleModalState {
   action: 'rewrite' | 'polish' | 'expand';
@@ -86,13 +87,45 @@ export function useAIEditorActions({
   const [fulltextModalOpen, setFulltextModalOpen] = useState(false);
   const [fulltextOutline, setFulltextOutline] = useState('');
 
-  // 延迟章节结构同步的 timer，组件卸载时清理避免 state-on-unmounted
-  const architectureTimerRef = useRef<number | null>(null);
+  // 只在用户接受“全文生成”的 ghost 文本后同步资料库，拒绝/取消不触发。
   useEffect(() => {
-    return () => {
-      if (architectureTimerRef.current !== null) window.clearTimeout(architectureTimerRef.current);
+    if (!editor) return;
+    let disposed = false;
+    let syncTimer: number | null = null;
+
+    const handleTransaction = ({ transaction }: { transaction: { getMeta: (key: string) => unknown } }) => {
+      const meta = transaction.getMeta(AI_GHOST_ACCEPTED_META);
+      if (!isFulltextGhostAcceptance(meta)) return;
+
+      if (syncTimer !== null) window.clearTimeout(syncTimer);
+      syncTimer = window.setTimeout(async () => {
+        try {
+          if (disposed || editor.isDestroyed) return;
+          const content = editor.getText();
+          if (content.trim().length < 50) return;
+          const book = await getBookInfo(bookId, currentBookId);
+          if (disposed || editor.isDestroyed) return;
+          await executeChapterArchitectureSync(
+            book.id,
+            chapterId,
+            chapterTitle,
+            content.slice(0, 8000),
+            book.title,
+            book.synopsis,
+          );
+        } catch {
+          // 结构同步失败不影响已经接受并保存的正文，错误由同步函数提示。
+        }
+      }, 0);
     };
-  }, []);
+
+    editor.on('transaction', handleTransaction);
+    return () => {
+      disposed = true;
+      if (syncTimer !== null) window.clearTimeout(syncTimer);
+      editor.off('transaction', handleTransaction);
+    };
+  }, [editor, bookId, currentBookId, chapterId, chapterTitle]);
 
   /** AI 续写：在光标处续写下文 */
   const handleAIContinue = async (): Promise<void> => {
@@ -152,28 +185,6 @@ export function useAIEditorActions({
         book.title,
         book.synopsis,
       );
-
-      // 全文生成完成后，异步触发章节结构同步（角色/场景/剧情/世界观/灵感）。
-      // 使用 setTimeout 等待 ghost text 内容稳定，再用编辑器纯文本做分析。
-      if (architectureTimerRef.current !== null) window.clearTimeout(architectureTimerRef.current);
-      architectureTimerRef.current = window.setTimeout(async () => {
-        try {
-          // 检查 editor 是否仍可用（用户可能在 1.5s 内切换章节或卸载组件）
-          if (!editor || editor.isDestroyed) return;
-          const content = editor.getText();
-          if (!content || content.length < 50) return;
-          await executeChapterArchitectureSync(
-            book.id,
-            chapterId,
-            chapterTitle,
-            content.slice(0, 8000), // 限制长度，避免超长内容
-            book.title,
-            book.synopsis,
-          );
-        } catch {
-          // 结构同步失败不影响主流程，错误已在 executeChapterArchitectureSync 内 toast
-        }
-      }, 1500);
     } catch {
       // 错误已在 executeFulltextEditor 内通过 toast 提示
     }

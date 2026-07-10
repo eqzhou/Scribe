@@ -27,7 +27,9 @@ import {
   streamCharacterGenerate,
   streamCharacterExtract,
 } from './aiClient';
+import { createAIGhostId, type AIGhostSource } from '../features/editor/nodes/AIGhostText';
 import { useToastStore } from '../stores';
+import { resolveForeshadowingSyncPatch } from './foreshadowingSync';
 import {
   chapterRepository,
   characterRepository,
@@ -49,7 +51,6 @@ import type {
   CharacterRole,
   PlotLineType,
   PlotLineStatus,
-  ForeshadowStatus,
 } from '../types';
 
 /** 合法的世界观分类白名单（用于校验 AI 返回值） */
@@ -81,12 +82,6 @@ const VALID_PLOT_LINE_STATUSES: ReadonlySet<string> = new Set([
   'writing',
   'done',
   'shelved',
-]);
-const VALID_FORESHADOW_STATUSES: ReadonlySet<string> = new Set([
-  'pending',
-  'planted',
-  'paidoff',
-  'abandoned',
 ]);
 
 function plainTextToHtml(text: string): string {
@@ -136,14 +131,6 @@ function safePlotLineType(type: unknown): PlotLineType {
 function safePlotLineStatus(status: unknown): PlotLineStatus {
   const value = String(status ?? '');
   return VALID_PLOT_LINE_STATUSES.has(value) ? (value as PlotLineStatus) : 'planning';
-}
-
-function safeForeshadowStatus(
-  status: unknown,
-  fallback: ForeshadowStatus,
-): ForeshadowStatus {
-  const value = String(status ?? '');
-  return VALID_FORESHADOW_STATUSES.has(value) ? (value as ForeshadowStatus) : fallback;
 }
 
 function byName<T extends { name: string }>(items: T[]): Map<string, T> {
@@ -223,10 +210,10 @@ export function getTextAfterCursor(editor: EditorLike): string {
 export async function executeContinue(
   editor: EditorLike & {
     commands: {
-      insertAIGhostText: (text?: string) => boolean;
-      setGhostText: (text: string) => boolean;
-      acceptGhostText: () => boolean;
-      rejectGhostText: () => boolean;
+      insertAIGhostText: (text?: string, source?: AIGhostSource, ghostId?: string) => boolean;
+      setGhostText: (ghostId: string, text: string) => boolean;
+      acceptGhostText: (ghostId?: string) => boolean;
+      rejectGhostText: (ghostId?: string) => boolean;
     };
   },
   bookId: string,
@@ -240,20 +227,21 @@ export async function executeContinue(
   const afterText = getTextAfterCursor(editor);
 
   // 先插入空 ghost 节点
-  editor.commands.insertAIGhostText('');
+  const ghostId = createAIGhostId();
+  editor.commands.insertAIGhostText('', 'continue', ghostId);
 
   let full = '';
   await streamContinue(
     { bookId, chapterId, beforeText, afterText, context },
     (chunk) => {
       full += chunk;
-      editor.commands.setGhostText(full);
+      editor.commands.setGhostText(ghostId, full);
     },
     (finalText) => {
       full = finalText;
     },
     (err) => {
-      editor.commands.rejectGhostText();
+      editor.commands.rejectGhostText(ghostId);
       useToastStore.getState().pushToast('error', `AI 续写失败：${err.message}`);
       throw err;
     },
@@ -271,10 +259,10 @@ export async function executeContinue(
 export async function executeRewrite(
   editor: EditorLike & {
     commands: {
-      insertAIGhostText: (text?: string) => boolean;
-      setGhostText: (text: string) => boolean;
-      acceptGhostText: () => boolean;
-      rejectGhostText: () => boolean;
+      insertAIGhostText: (text?: string, source?: AIGhostSource, ghostId?: string) => boolean;
+      setGhostText: (ghostId: string, text: string) => boolean;
+      acceptGhostText: (ghostId?: string) => boolean;
+      rejectGhostText: (ghostId?: string) => boolean;
     };
   },
   selectedText: string,
@@ -286,20 +274,21 @@ export async function executeRewrite(
   signal?: AbortSignal,
 ): Promise<string> {
   const context = await buildAIContext(bookId, bookTitle, synopsis);
-  editor.commands.insertAIGhostText('');
+  const ghostId = createAIGhostId();
+  editor.commands.insertAIGhostText('', 'rewrite', ghostId);
 
   let full = '';
   await streamRewrite(
     { text: selectedText, action, style, context },
     (chunk) => {
       full += chunk;
-      editor.commands.setGhostText(full);
+      editor.commands.setGhostText(ghostId, full);
     },
     (finalText) => {
       full = finalText;
     },
     (err) => {
-      editor.commands.rejectGhostText();
+      editor.commands.rejectGhostText(ghostId);
       useToastStore.getState().pushToast('error', `AI ${action}失败：${err.message}`);
       throw err;
     },
@@ -387,10 +376,10 @@ export async function executeFulltext(
 export async function executeFulltextEditor(
   editor: EditorLike & {
     commands: {
-      insertAIGhostText: (text?: string) => boolean;
-      setGhostText: (text: string) => boolean;
-      acceptGhostText: () => boolean;
-      rejectGhostText: () => boolean;
+      insertAIGhostText: (text?: string, source?: AIGhostSource, ghostId?: string) => boolean;
+      setGhostText: (ghostId: string, text: string) => boolean;
+      acceptGhostText: (ghostId?: string) => boolean;
+      rejectGhostText: (ghostId?: string) => boolean;
     };
   },
   bookId: string,
@@ -403,20 +392,21 @@ export async function executeFulltextEditor(
 ): Promise<string> {
   const context = await buildAIContext(bookId, bookTitle, synopsis);
 
-  editor.commands.insertAIGhostText('');
+  const ghostId = createAIGhostId();
+  editor.commands.insertAIGhostText('', 'fulltext', ghostId);
 
   let full = '';
   await streamFulltext(
     { bookId, chapterTitle, outline, context },
     (chunk) => {
       full += chunk;
-      editor.commands.setGhostText(full);
+      editor.commands.setGhostText(ghostId, full);
     },
     (finalText) => {
       full = finalText;
     },
     (err) => {
-      editor.commands.rejectGhostText();
+      editor.commands.rejectGhostText(ghostId);
       useToastStore.getState().pushToast('error', `AI 全文生成失败：${err.message}`);
       throw err;
     },
@@ -777,20 +767,14 @@ async function insertProjectBlueprint(
     const payoffChapterId = item.payoffChapterTitle
       ? chapterMap.get(String(item.payoffChapterTitle))?.id
       : undefined;
-    const inferredStatus: ForeshadowStatus = payoffChapterId
-      ? 'paidoff'
-      : setupChapterId
-        ? 'planted'
-        : 'pending';
     await foreshadowingRepository.create({
       bookId,
       title,
       description: String(item.description ?? '').slice(0, 5000),
       setupChapterId,
       payoffChapterId,
-      status: setupChapterId || payoffChapterId
-        ? inferredStatus
-        : safeForeshadowStatus(item.status, inferredStatus),
+      // 蓝图只记录计划埋设/回收位置，实际正文确认前始终保持待埋设。
+      status: 'pending',
     });
     foreshadowTitles.add(title);
     summary.foreshadowing++;
@@ -1193,15 +1177,7 @@ async function insertChapterArchitecture(
 
     const existing = foreshadowingMap.get(title);
     if (existing) {
-      const patch: Partial<Foreshadowing> = {};
-      if (action === 'plant' && !existing.setupChapterId) {
-        patch.setupChapterId = chapterId;
-        patch.status = existing.status === 'pending' ? 'planted' : existing.status;
-      }
-      if (action === 'payoff' && !existing.payoffChapterId) {
-        patch.payoffChapterId = chapterId;
-        patch.status = 'paidoff';
-      }
+      const patch = resolveForeshadowingSyncPatch(existing, action, chapterId);
       if (!existing.description && item.description) {
         patch.description = String(item.description).slice(0, 5000);
       }

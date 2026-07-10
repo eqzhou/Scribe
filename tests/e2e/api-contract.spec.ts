@@ -16,6 +16,13 @@ import {
   parseChapterArchitectureResult,
   parseProjectBlueprintResult,
 } from '../../src/lib/aiClient';
+import {
+  isFulltextGhostAcceptance,
+  createAIGhostId,
+  matchesAIGhostId,
+  updateGhostAttributes,
+} from '../../src/features/editor/nodes/AIGhostText';
+import { resolveForeshadowingSyncPatch } from '../../src/lib/foreshadowingSync';
 
 const BASE = 'http://localhost:8787/api';
 
@@ -52,31 +59,67 @@ async function setupUserAndBook(request: import('@playwright/test').APIRequestCo
 }
 
 test.describe('API 路径契约验证', () => {
-  test('AI 结构化 JSON 契约拒绝缺失必填集合的结果', () => {
-    const completeBlueprint = JSON.stringify({
-      worldview: [],
-      characters: [],
-      scenes: [],
-      plotLines: [],
-      plotPoints: [],
-      inspirations: [],
-      foreshadowing: [],
-      chapters: [],
+  test('仅接受全文生成的 Ghost Text 才触发章节结构同步', () => {
+    expect(isFulltextGhostAcceptance({ source: 'fulltext', text: '已接受的正文' })).toBeTruthy();
+    expect(isFulltextGhostAcceptance({ source: 'continue', text: '续写建议' })).toBeFalsy();
+    expect(isFulltextGhostAcceptance({ source: 'fulltext' })).toBeFalsy();
+    expect(updateGhostAttributes({ source: 'fulltext', text: '' }, '流式正文')).toEqual({
+      source: 'fulltext',
+      text: '流式正文',
     });
-    expect(parseProjectBlueprintResult(completeBlueprint)).not.toBeNull();
+    expect(createAIGhostId()).not.toBe(createAIGhostId());
+    expect(matchesAIGhostId('fulltext-ghost', 'fulltext-ghost')).toBeTruthy();
+    expect(matchesAIGhostId('continue-ghost', 'fulltext-ghost')).toBeFalsy();
+  });
+
+  test('伏笔计划关联只在实际章节分析命中后更新状态', () => {
+    const base = {
+      id: 'foreshadow-1', bookId: 'book-1', title: '玉佩裂纹', description: '线索',
+      setupChapterId: 'chapter-1', payoffChapterId: 'chapter-3', status: 'pending' as const,
+    };
+    expect(resolveForeshadowingSyncPatch(base, 'plant', 'chapter-1')).toEqual({ status: 'planted' });
+    expect(resolveForeshadowingSyncPatch(base, 'payoff', 'chapter-3')).toEqual({ status: 'paidoff' });
+    expect(resolveForeshadowingSyncPatch(base, 'payoff', 'chapter-2')).toEqual({});
+    expect(resolveForeshadowingSyncPatch(
+      { ...base, setupChapterId: undefined, payoffChapterId: undefined },
+      'plant',
+      'chapter-2',
+    )).toEqual({ setupChapterId: 'chapter-2', status: 'planted' });
+  });
+
+  test('AI 结构化 JSON 契约拒绝缺失必填集合的结果', () => {
+    const completeBlueprint = {
+      worldview: [{ category: 'geography', title: '云隐山', content: '主角成长的山门。', tags: ['山门'] }],
+      characters: [{
+        name: '林逸风', alias: '', faction: '云隐派', role: 'protagonist',
+        appearance: '青衫长剑。', personality: '正直果断。', background: '云隐派弟子。',
+        arc: '从少年成长为守护者。', tags: ['主角'], relatedWorldviewTitles: ['云隐山'],
+      }],
+      scenes: [{
+        name: '云隐山后山', description: '迷雾中的禁地。', atmosphere: ['神秘'],
+        characterNames: ['林逸风'], worldviewTitles: ['云隐山'], chapterTitles: ['第一章'],
+      }],
+      plotLines: [{ title: '身世之谜', type: 'main', synopsis: '主角追查自己的身世。', status: 'planning', order: 0 }],
+      plotPoints: [{
+        plotLineTitle: '身世之谜', title: '发现玉佩', description: '主角在禁地发现线索。',
+        chapterTitle: '第一章', characterNames: ['林逸风'], order: 0, timelineOrder: 0,
+      }],
+      inspirations: [{ title: '失落玉佩', content: '可作为后续谜团线索。', tags: ['伏笔'], category: '道具' }],
+      foreshadowing: [{
+        title: '玉佩裂纹', description: '裂纹暗示主角血脉。',
+        setupChapterTitle: '第一章', payoffChapterTitle: '第一章', status: 'pending',
+      }],
+      chapters: [{ title: '第一章', summary: '主角发现玉佩。', outline: '进入禁地并发现线索。', order: 0 }],
+    };
+    expect(parseProjectBlueprintResult(JSON.stringify(completeBlueprint))).not.toBeNull();
     expect(parseProjectBlueprintResult(JSON.stringify({ worldview: [] }))).toBeNull();
+    expect(parseProjectBlueprintResult(JSON.stringify({ ...completeBlueprint, characters: [{}] }))).toBeNull();
     expect(parseProjectBlueprintResult(JSON.stringify({
-      worldview: [null],
-      characters: [],
-      scenes: [],
-      plotLines: [],
-      plotPoints: [],
-      inspirations: [],
-      foreshadowing: [],
-      chapters: [],
+      ...completeBlueprint,
+      foreshadowing: [{ ...completeBlueprint.foreshadowing[0], setupChapterTitle: '不存在的章节' }],
     }))).toBeNull();
 
-    const completeArchitecture = JSON.stringify({
+    const completeArchitecture = {
       chapterSummary: '本章摘要',
       characters: [],
       scenes: [],
@@ -84,9 +127,13 @@ test.describe('API 路径契约验证', () => {
       worldview: [],
       inspirations: [],
       foreshadowing: [],
-    });
-    expect(parseChapterArchitectureResult(completeArchitecture)).not.toBeNull();
+    };
+    expect(parseChapterArchitectureResult(JSON.stringify(completeArchitecture))).not.toBeNull();
     expect(parseChapterArchitectureResult(JSON.stringify({ characters: [] }))).toBeNull();
+    expect(parseChapterArchitectureResult(JSON.stringify({
+      ...completeArchitecture,
+      foreshadowing: [{ title: '伏笔', description: '描述', action: 'invalid' }],
+    }))).toBeNull();
   });
 
   test('落地页截图资源可访问', async ({ request }) => {
