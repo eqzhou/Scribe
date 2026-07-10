@@ -12,6 +12,10 @@
  * - 验证路径用连字符格式（非驼峰）
  */
 import { test, expect } from '@playwright/test';
+import {
+  parseChapterArchitectureResult,
+  parseProjectBlueprintResult,
+} from '../../src/lib/aiClient';
 
 const BASE = 'http://localhost:8787/api';
 
@@ -48,6 +52,43 @@ async function setupUserAndBook(request: import('@playwright/test').APIRequestCo
 }
 
 test.describe('API 路径契约验证', () => {
+  test('AI 结构化 JSON 契约拒绝缺失必填集合的结果', () => {
+    const completeBlueprint = JSON.stringify({
+      worldview: [],
+      characters: [],
+      scenes: [],
+      plotLines: [],
+      plotPoints: [],
+      inspirations: [],
+      foreshadowing: [],
+      chapters: [],
+    });
+    expect(parseProjectBlueprintResult(completeBlueprint)).not.toBeNull();
+    expect(parseProjectBlueprintResult(JSON.stringify({ worldview: [] }))).toBeNull();
+    expect(parseProjectBlueprintResult(JSON.stringify({
+      worldview: [null],
+      characters: [],
+      scenes: [],
+      plotLines: [],
+      plotPoints: [],
+      inspirations: [],
+      foreshadowing: [],
+      chapters: [],
+    }))).toBeNull();
+
+    const completeArchitecture = JSON.stringify({
+      chapterSummary: '本章摘要',
+      characters: [],
+      scenes: [],
+      plotPoints: [],
+      worldview: [],
+      inspirations: [],
+      foreshadowing: [],
+    });
+    expect(parseChapterArchitectureResult(completeArchitecture)).not.toBeNull();
+    expect(parseChapterArchitectureResult(JSON.stringify({ characters: [] }))).toBeNull();
+  });
+
   test('落地页截图资源可访问', async ({ request }) => {
     const landing = await request.get('/');
     const html = await landing.text();
@@ -250,7 +291,7 @@ test.describe('API 路径契约验证', () => {
       data: { plotLineId: plotLine.id, title: '起始点' },
     });
     expect(ppRes.ok()).toBeTruthy();
-    const plotPoint = await ppRes.json();
+    await ppRes.json();
 
     // 按剧情线查节点（二级路由）
     const byLineRes = await request.get(
@@ -268,7 +309,7 @@ test.describe('API 路径契约验证', () => {
       data: { title: '神秘信件', status: 'pending' },
     });
     expect(fsRes.ok()).toBeTruthy();
-    const foreshadow = await fsRes.json();
+    await fsRes.json();
 
     // 查伏笔列表
     const fsListRes = await request.get(`${BASE}/books/${bookId}/foreshadowing`, { headers });

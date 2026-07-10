@@ -269,7 +269,7 @@ export interface WritingLog {
 /**
  * AI 大模型配置
  *
- * 持久化在服务端（server/data/models.json），前端通过 /api/models 同步。
+ * 持久化在服务端 PostgreSQL 的 AIModel 表，前端通过 /api/models 同步。
  * API Key 仅存于服务端，前端展示时掩码处理。
  * 所有服务商均通过 OpenAI 兼容接口调用。
  */

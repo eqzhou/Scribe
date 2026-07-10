@@ -260,7 +260,7 @@ export function buildProjectBlueprintMessages(
   targetWords: number
 ): ChatMessage[] {
   const system =
-    '你是资深小说架构师。根据用户的新书信息生成可直接入库的项目蓝图。只输出严格 JSON 对象，不要解释，不要代码块。字段必须包含 worldview、characters、scenes、plotLines、plotPoints、inspirations、chapters。worldview 生成 6 条，category 只能是 geography/history/faction/system/culture/item；characters 生成 4-8 个，role 只能是 protagonist/supporting/antagonist/minor；scenes 生成 6-10 个；plotLines 生成 1-3 条，type 只能是 main/sub，status 用 planning；plotPoints 生成 8-16 个并用 plotLineTitle 关联剧情线；inspirations 生成 6-10 张；chapters 生成 8-16 个章节草案。所有字符串使用中文，内容具体、有故事钩子，避免空泛。';
+    '你是资深小说架构师。根据用户的新书信息生成可直接入库的项目蓝图。只输出严格 JSON 对象，不要解释，不要代码块。字段必须包含 worldview、characters、scenes、plotLines、plotPoints、inspirations、foreshadowing、chapters。worldview 生成 6 条，category 只能是 geography/history/faction/system/culture/item；characters 生成 4-8 个，role 只能是 protagonist/supporting/antagonist/minor；scenes 生成 6-10 个；plotLines 生成 1-3 条，type 只能是 main/sub，status 用 planning；plotPoints 生成 8-16 个并用 plotLineTitle 关联剧情线；inspirations 生成 6-10 张；foreshadowing 生成 4-8 条，使用 setupChapterTitle/payoffChapterTitle 关联 chapters 中的标题；chapters 生成 8-16 个章节草案。所有字符串使用中文，内容具体、有故事钩子，避免空泛。';
   const user = `【书名】${bookTitle}
 【副标题】${subtitle ?? '无'}
 【类型】${genre}
@@ -276,6 +276,7 @@ ${synopsis}
   "plotLines":[{"title":"","type":"main","synopsis":"","status":"planning","order":0}],
   "plotPoints":[{"plotLineTitle":"","title":"","description":"","chapterTitle":"","characterNames":[],"order":0,"timelineOrder":0}],
   "inspirations":[{"title":"","content":"","tags":[],"category":""}],
+  "foreshadowing":[{"title":"","description":"","setupChapterTitle":"","payoffChapterTitle":"","status":"pending"}],
   "chapters":[{"title":"","summary":"","outline":"","order":0}]
 }`;
   return [
@@ -294,10 +295,11 @@ export function buildChapterArchitectureMessages(
   existingCharacters: Array<{ name: string; alias?: string }>,
   existingScenes: Array<{ name: string }>,
   existingWorldview: Array<{ title: string }>,
-  existingPlotLines: Array<{ title: string }>
+  existingPlotLines: Array<{ title: string }>,
+  existingForeshadowing: Array<{ title: string; status: string }>,
 ): ChatMessage[] {
   const system =
-    '你是小说资料库整理助手。请从单章正文中提取结构化副产物，用于写入角色、场景、剧情节点、世界观和灵感。只输出严格 JSON 对象，不要解释，不要代码块。characters 只输出已有角色列表之外的新角色；scenes 只输出已有场景列表之外的新场景；worldview 只输出本章新增或明显扩展的设定；plotPoints 输出 1-4 个本章推进的剧情节点；inspirations 输出 1-3 个可复用创意卡。';
+    '你是小说资料库整理助手。请从单章正文中提取结构化副产物，用于写入章节摘要、角色、场景、剧情节点、世界观、灵感和伏笔。只输出严格 JSON 对象，不要解释，不要代码块。characters 只输出已有角色列表之外的新角色；scenes 只输出已有场景列表之外的新场景；worldview 只输出本章新增或明显扩展的设定；plotPoints 输出 1-4 个本章推进的剧情节点；inspirations 输出 1-3 个可复用创意卡；foreshadowing 只输出本章明确埋设或回收的伏笔，action 只能为 plant 或 payoff。';
   const existingCharacterText = existingCharacters.length
     ? existingCharacters.map((c) => `- ${c.name}${c.alias ? `（${c.alias}）` : ''}`).join('\n')
     : '无';
@@ -309,6 +311,9 @@ export function buildChapterArchitectureMessages(
     : '无';
   const existingPlotLineText = existingPlotLines.length
     ? existingPlotLines.map((p) => `- ${p.title}`).join('\n')
+    : '无';
+  const existingForeshadowingText = existingForeshadowing.length
+    ? existingForeshadowing.map((f) => `- ${f.title}（${f.status}）`).join('\n')
     : '无';
   const user = `【书籍信息】
 书名：${context.bookTitle}
@@ -326,6 +331,9 @@ ${existingWorldviewText}
 【已有剧情线】
 ${existingPlotLineText}
 
+【已有伏笔】
+${existingForeshadowingText}
+
 【章节标题】
 ${chapterTitle}
 
@@ -334,11 +342,13 @@ ${chapterContent}
 
 请输出如下 JSON 结构：
 {
+  "chapterSummary":"",
   "characters":[{"name":"","role":"supporting","appearance":"","personality":"","background":""}],
   "scenes":[{"name":"","description":"","atmosphere":[],"characterNames":[],"worldviewTitles":[]}],
   "plotPoints":[{"plotLineTitle":"","title":"","description":"","characterNames":[],"order":0,"timelineOrder":0}],
   "worldview":[{"category":"culture","title":"","content":"","tags":[]}],
-  "inspirations":[{"title":"","content":"","tags":[],"category":""}]
+  "inspirations":[{"title":"","content":"","tags":[],"category":""}],
+  "foreshadowing":[{"title":"","description":"","action":"plant"}]
 }`;
   return [
     { role: 'system', content: system },

@@ -362,6 +362,7 @@ router.post('/chapter-architecture', createJsonRoute<{
   existingScenes?: Array<{ name: string }>;
   existingWorldview?: Array<{ title: string }>;
   existingPlotLines?: Array<{ title: string }>;
+  existingForeshadowing?: Array<{ title: string; status: string }>;
 }>(
   (body) => buildChapterArchitectureMessages(
     body.chapterTitle,
@@ -371,6 +372,7 @@ router.post('/chapter-architecture', createJsonRoute<{
     body.existingScenes ?? [],
     body.existingWorldview ?? [],
     body.existingPlotLines ?? [],
+    body.existingForeshadowing ?? [],
   ),
   ['chapterTitle', 'chapterContent', 'context'],
 ));

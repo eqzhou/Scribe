@@ -137,7 +137,7 @@ export async function seedDemoData(userId: string): Promise<string> {
       summary: '云隐录秘密初现，林逸风身世浮出水面。',
     },
   });
-  const ch6 = await prisma.chapter.create({
+  const _ch6 = await prisma.chapter.create({
     data: {
       userId,
       bookId,
@@ -162,7 +162,7 @@ export async function seedDemoData(userId: string): Promise<string> {
       summary: '林逸风与墨无痕的终极一战。',
     },
   });
-  const ch8 = await prisma.chapter.create({
+  const _ch8 = await prisma.chapter.create({
     data: {
       userId,
       bookId,
@@ -231,7 +231,7 @@ export async function seedDemoData(userId: string): Promise<string> {
       tags: ['反派', '邪教'],
     },
   });
-  const wv6 = await prisma.worldviewEntry.create({
+  const _wv6 = await prisma.worldviewEntry.create({
     data: {
       userId,
       bookId,

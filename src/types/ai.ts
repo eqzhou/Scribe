@@ -97,6 +97,16 @@ export interface WorldviewBatchItem {
   tags: string[];
 }
 
+/** AI 生成的伏笔条目。章节分析通过 action 标识本章是埋设还是回收。 */
+export interface AIForeshadowingItem {
+  title: string;
+  description: string;
+  setupChapterTitle?: string;
+  payoffChapterTitle?: string;
+  status?: string;
+  action?: 'plant' | 'payoff';
+}
+
 /** 项目蓝图生成请求体 */
 export interface ProjectBlueprintRequest {
   bookTitle: string;
@@ -151,6 +161,7 @@ export interface ProjectBlueprintResult {
     tags?: string[];
     category?: string;
   }>;
+  foreshadowing: AIForeshadowingItem[];
   chapters: Array<{
     title: string;
     summary?: string;
@@ -206,10 +217,12 @@ export interface ChapterArchitectureRequest {
   existingScenes?: Array<{ name: string }>;
   existingWorldview?: Array<{ title: string }>;
   existingPlotLines?: Array<{ title: string }>;
+  existingForeshadowing?: Array<{ title: string; status: string }>;
 }
 
 /** 章节结构分析结果 */
 export interface ChapterArchitectureResult {
+  chapterSummary?: string;
   characters: CharacterExtractItem[];
   scenes: Array<{
     name: string;
@@ -233,6 +246,7 @@ export interface ChapterArchitectureResult {
     tags?: string[];
     category?: string;
   }>;
+  foreshadowing: AIForeshadowingItem[];
 }
 
 /** 章节大纲条目（大纲生成结果） */

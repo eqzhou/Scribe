@@ -32,6 +32,7 @@ import {
   chapterRepository,
   characterRepository,
   inspirationRepository,
+  foreshadowingRepository,
   plotLineRepository,
   plotPointRepository,
   sceneRepository,
@@ -40,6 +41,7 @@ import {
 import type {
   Character,
   Inspiration,
+  Foreshadowing,
   PlotLine,
   PlotPoint,
   Scene,
@@ -47,6 +49,7 @@ import type {
   CharacterRole,
   PlotLineType,
   PlotLineStatus,
+  ForeshadowStatus,
 } from '../types';
 
 /** 合法的世界观分类白名单（用于校验 AI 返回值） */
@@ -78,6 +81,12 @@ const VALID_PLOT_LINE_STATUSES: ReadonlySet<string> = new Set([
   'writing',
   'done',
   'shelved',
+]);
+const VALID_FORESHADOW_STATUSES: ReadonlySet<string> = new Set([
+  'pending',
+  'planted',
+  'paidoff',
+  'abandoned',
 ]);
 
 function plainTextToHtml(text: string): string {
@@ -127,6 +136,14 @@ function safePlotLineType(type: unknown): PlotLineType {
 function safePlotLineStatus(status: unknown): PlotLineStatus {
   const value = String(status ?? '');
   return VALID_PLOT_LINE_STATUSES.has(value) ? (value as PlotLineStatus) : 'planning';
+}
+
+function safeForeshadowStatus(
+  status: unknown,
+  fallback: ForeshadowStatus,
+): ForeshadowStatus {
+  const value = String(status ?? '');
+  return VALID_FORESHADOW_STATUSES.has(value) ? (value as ForeshadowStatus) : fallback;
 }
 
 function byName<T extends { name: string }>(items: T[]): Map<string, T> {
@@ -536,6 +553,7 @@ export interface ProjectBlueprintInsertSummary {
   plotLines: number;
   plotPoints: number;
   inspirations: number;
+  foreshadowing: number;
   chapters: number;
 }
 
@@ -564,7 +582,7 @@ export async function executeProjectBlueprint(
           const summary = await insertProjectBlueprint(bookId, blueprint);
           useToastStore.getState().pushToast(
             'success',
-            `架构已生成：世界观 ${summary.worldview}、角色 ${summary.characters}、场景 ${summary.scenes}、剧情节点 ${summary.plotPoints}、灵感 ${summary.inspirations}`,
+            `架构已生成：世界观 ${summary.worldview}、角色 ${summary.characters}、场景 ${summary.scenes}、剧情节点 ${summary.plotPoints}、伏笔 ${summary.foreshadowing}、灵感 ${summary.inspirations}`,
           );
           resolve(summary);
         } catch (err) {
@@ -593,6 +611,7 @@ async function insertProjectBlueprint(
     plotLines: 0,
     plotPoints: 0,
     inspirations: 0,
+    foreshadowing: 0,
     chapters: 0,
   };
 
@@ -748,6 +767,35 @@ async function insertProjectBlueprint(
     summary.inspirations++;
   }
 
+  const foreshadowTitles = new Set<string>();
+  for (const item of blueprint.foreshadowing ?? []) {
+    const title = String(item.title ?? '').trim();
+    if (!title || foreshadowTitles.has(title)) continue;
+    const setupChapterId = item.setupChapterTitle
+      ? chapterMap.get(String(item.setupChapterTitle))?.id
+      : undefined;
+    const payoffChapterId = item.payoffChapterTitle
+      ? chapterMap.get(String(item.payoffChapterTitle))?.id
+      : undefined;
+    const inferredStatus: ForeshadowStatus = payoffChapterId
+      ? 'paidoff'
+      : setupChapterId
+        ? 'planted'
+        : 'pending';
+    await foreshadowingRepository.create({
+      bookId,
+      title,
+      description: String(item.description ?? '').slice(0, 5000),
+      setupChapterId,
+      payoffChapterId,
+      status: setupChapterId || payoffChapterId
+        ? inferredStatus
+        : safeForeshadowStatus(item.status, inferredStatus),
+    });
+    foreshadowTitles.add(title);
+    summary.foreshadowing++;
+  }
+
   return summary;
 }
 
@@ -875,11 +923,13 @@ export async function executeCharacterExtract(
 }
 
 export interface ChapterArchitectureInsertSummary {
+  chapterSummary: boolean;
   characters: number;
   scenes: number;
   plotPoints: number;
   worldview: number;
   inspirations: number;
+  foreshadowing: number;
 }
 
 /**
@@ -902,6 +952,7 @@ export async function executeChapterArchitectureSync(
     existingPlotLines,
     existingPlotPoints,
     existingInspirations,
+    existingForeshadowing,
   ] = await Promise.all([
     characterRepository.list(bookId),
     sceneRepository.list(bookId),
@@ -909,6 +960,7 @@ export async function executeChapterArchitectureSync(
     plotLineRepository.list(bookId),
     plotPointRepository.list(bookId),
     inspirationRepository.list(bookId),
+    foreshadowingRepository.list(bookId),
   ]);
   const context = await buildAIContext(bookId, bookTitle, synopsis);
 
@@ -922,12 +974,13 @@ export async function executeChapterArchitectureSync(
         existingScenes: existingScenes.map((s) => ({ name: s.name })),
         existingWorldview: existingWorldview.map((w) => ({ title: w.title })),
         existingPlotLines: existingPlotLines.map((p) => ({ title: p.title })),
+        existingForeshadowing: existingForeshadowing.map((f) => ({ title: f.title, status: f.status })),
       },
       (chunk) => onProgress?.(chunk),
       async (result: ChapterArchitectureResult | null) => {
         try {
           if (!result) {
-            resolve({ characters: 0, scenes: 0, plotPoints: 0, worldview: 0, inspirations: 0 });
+            resolve({ chapterSummary: false, characters: 0, scenes: 0, plotPoints: 0, worldview: 0, inspirations: 0, foreshadowing: 0 });
             return;
           }
           const summary = await insertChapterArchitecture(
@@ -940,12 +993,13 @@ export async function executeChapterArchitectureSync(
             existingPlotLines,
             existingPlotPoints,
             existingInspirations,
+            existingForeshadowing,
           );
-          const total = summary.characters + summary.scenes + summary.plotPoints + summary.worldview + summary.inspirations;
+          const total = (summary.chapterSummary ? 1 : 0) + summary.characters + summary.scenes + summary.plotPoints + summary.worldview + summary.inspirations + summary.foreshadowing;
           if (total > 0) {
             useToastStore.getState().pushToast(
               'success',
-              `本章资料已同步：角色 ${summary.characters}、场景 ${summary.scenes}、剧情 ${summary.plotPoints}`,
+              `本章资料已同步：角色 ${summary.characters}、场景 ${summary.scenes}、剧情 ${summary.plotPoints}、伏笔 ${summary.foreshadowing}`,
             );
           }
           resolve(summary);
@@ -974,13 +1028,16 @@ async function insertChapterArchitecture(
   existingPlotLines: PlotLine[],
   existingPlotPoints: PlotPoint[],
   existingInspirations: Inspiration[],
+  existingForeshadowing: Foreshadowing[],
 ): Promise<ChapterArchitectureInsertSummary> {
   const summary: ChapterArchitectureInsertSummary = {
+    chapterSummary: false,
     characters: 0,
     scenes: 0,
     plotPoints: 0,
     worldview: 0,
     inspirations: 0,
+    foreshadowing: 0,
   };
   const characterMap = byName(existingCharacters);
   const sceneMap = byName(existingScenes);
@@ -990,6 +1047,13 @@ async function insertChapterArchitecture(
     existingPlotPoints.map((point) => `${point.chapterId ?? ''}::${point.title}`),
   );
   const inspirationTitles = new Set(existingInspirations.map((item) => item.title));
+  const foreshadowingMap = byTitle(existingForeshadowing);
+
+  const chapterSummary = String(result.chapterSummary ?? '').trim().slice(0, 4000);
+  if (chapterSummary) {
+    await chapterRepository.update(chapterId, { summary: chapterSummary });
+    summary.chapterSummary = true;
+  }
 
   for (const item of result.characters ?? []) {
     const name = String(item.name ?? '').trim();
@@ -1120,6 +1184,45 @@ async function insertChapterArchitecture(
     });
     inspirationTitles.add(title);
     summary.inspirations++;
+  }
+
+  for (const item of result.foreshadowing ?? []) {
+    const title = String(item.title ?? '').trim();
+    const action = item.action;
+    if (!title || (action !== 'plant' && action !== 'payoff')) continue;
+
+    const existing = foreshadowingMap.get(title);
+    if (existing) {
+      const patch: Partial<Foreshadowing> = {};
+      if (action === 'plant' && !existing.setupChapterId) {
+        patch.setupChapterId = chapterId;
+        patch.status = existing.status === 'pending' ? 'planted' : existing.status;
+      }
+      if (action === 'payoff' && !existing.payoffChapterId) {
+        patch.payoffChapterId = chapterId;
+        patch.status = 'paidoff';
+      }
+      if (!existing.description && item.description) {
+        patch.description = String(item.description).slice(0, 5000);
+      }
+      if (Object.keys(patch).length > 0) {
+        const updated = await foreshadowingRepository.update(existing.id, patch);
+        foreshadowingMap.set(updated.title, updated);
+        summary.foreshadowing++;
+      }
+      continue;
+    }
+
+    const created = await foreshadowingRepository.create({
+      bookId,
+      title,
+      description: String(item.description ?? '').slice(0, 5000),
+      setupChapterId: action === 'plant' ? chapterId : undefined,
+      payoffChapterId: action === 'payoff' ? chapterId : undefined,
+      status: action === 'payoff' ? 'paidoff' : 'planted',
+    });
+    foreshadowingMap.set(created.title, created);
+    summary.foreshadowing++;
   }
 
   return summary;

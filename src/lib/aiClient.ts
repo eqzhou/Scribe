@@ -237,6 +237,51 @@ function parseJsonOrFallback<T>(raw: string, fallback: T): T {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isRecordArray(value: unknown): boolean {
+  return Array.isArray(value) && value.every(isRecord);
+}
+
+/**
+ * 仅接受具备约定数组字段的 JSON 对象，避免模型返回任意合法 JSON 后被误入库。
+ */
+function parseStructuredJson<T>(
+  raw: string,
+  requiredArrayFields: readonly string[],
+): T | null {
+  const parsed = parseJsonOrFallback<unknown>(raw, null);
+  if (!isRecord(parsed)) return null;
+  if (!requiredArrayFields.every((field) => isRecordArray(parsed[field]))) return null;
+  return parsed as T;
+}
+
+export function parseProjectBlueprintResult(raw: string): ProjectBlueprintResult | null {
+  return parseStructuredJson<ProjectBlueprintResult>(raw, [
+    'worldview',
+    'characters',
+    'scenes',
+    'plotLines',
+    'plotPoints',
+    'inspirations',
+    'foreshadowing',
+    'chapters',
+  ]);
+}
+
+export function parseChapterArchitectureResult(raw: string): ChapterArchitectureResult | null {
+  return parseStructuredJson<ChapterArchitectureResult>(raw, [
+    'characters',
+    'scenes',
+    'plotPoints',
+    'worldview',
+    'inspirations',
+    'foreshadowing',
+  ]);
+}
+
 /**
  * 生成章节大纲。
  *
@@ -316,7 +361,7 @@ export async function streamProjectBlueprint(
       onChunk(chunk);
     },
     () => {
-      onDone(parseJsonOrFallback<ProjectBlueprintResult | null>(raw, null));
+      onDone(parseProjectBlueprintResult(raw));
     },
     onError,
     signal,
@@ -340,7 +385,7 @@ export async function streamChapterArchitecture(
       onChunk(chunk);
     },
     () => {
-      onDone(parseJsonOrFallback<ChapterArchitectureResult | null>(raw, null));
+      onDone(parseChapterArchitectureResult(raw));
     },
     onError,
     signal,
