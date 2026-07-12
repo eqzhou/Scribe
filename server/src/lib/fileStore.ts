@@ -41,6 +41,22 @@ function sanitizeSegment(name: string, kind: 'userId' | 'bookTitle' | 'chapterTi
   return cleaned;
 }
 
+/** 判断标题能否无损映射为单个文件路径片段。 */
+export function isValidFileSegment(name: string): boolean {
+  try {
+    return name.length <= 100
+      && Buffer.byteLength(`${name}.md`, 'utf8') <= 255
+      && sanitizeSegment(name, 'chapterTitle') === name;
+  } catch {
+    return false;
+  }
+}
+
+/** 生成跨常见桌面文件系统稳定的路径比较键。 */
+export function fileSegmentIdentity(name: string): string {
+  return name.normalize('NFC').toLocaleLowerCase('en-US');
+}
+
 // 拼接某章节的完整文件路径
 function buildChapterPath(userId: string, bookTitle: string, chapterTitle: string): string {
   const u = sanitizeSegment(userId, 'userId');

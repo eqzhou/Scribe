@@ -12,14 +12,23 @@
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Loader2, AlertTriangle, Settings } from 'lucide-react';
+import { Sparkles, Loader2, AlertTriangle, Settings, ArrowLeft, RefreshCw } from 'lucide-react';
 import { Modal } from '../../components/ui';
 import { Button, Input, Textarea } from '../../components/ui';
 import { bookRepository } from '../../lib/repositories';
-import { executeProjectBlueprint } from '../../lib/aiTools';
+import { createBookWithBlueprint, generateProjectBlueprint } from '../../lib/aiTools';
 import { useToastStore, useAIModelStore } from '../../stores';
 import type { Book } from '../../types';
+import type { ProjectBlueprintResult, ProjectStructureLevel } from '../../types/ai';
 import { cn } from '../../utils/cn';
+import {
+  BlueprintReview,
+} from './BlueprintReview';
+import {
+  countBlueprintItems,
+  removeBlueprintItem,
+  type BlueprintSectionKey,
+} from './blueprintUtils';
 
 export interface BookFormProps {
   /** 是否打开 */
@@ -65,6 +74,15 @@ const DEFAULT_FORM: BookFormState = {
   dailyGoal: 3000,
 };
 
+const STRUCTURE_LEVELS: Array<{
+  value: ProjectStructureLevel;
+  label: string;
+}> = [
+  { value: 'simple', label: '简版' },
+  { value: 'standard', label: '标准' },
+  { value: 'detailed', label: '详细' },
+];
+
 /** 表单状态结构 */
 interface BookFormState {
   title: string;
@@ -76,6 +94,18 @@ interface BookFormState {
   dailyGoal: number;
 }
 
+function createBookPayload(form: BookFormState) {
+  return {
+    title: form.title.trim(),
+    subtitle: form.subtitle.trim(),
+    synopsis: form.synopsis.trim(),
+    genre: form.genre,
+    targetWords: form.targetWords,
+    coverColor: form.coverColor,
+    dailyGoal: form.dailyGoal,
+  };
+}
+
 /**
  * 作品新建/编辑表单弹窗。
  */
@@ -83,6 +113,9 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
   const [form, setForm] = useState<BookFormState>(DEFAULT_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [generatingBlueprint, setGeneratingBlueprint] = useState(false);
+  const [confirmingBlueprint, setConfirmingBlueprint] = useState(false);
+  const [structureLevel, setStructureLevel] = useState<ProjectStructureLevel>('standard');
+  const [blueprint, setBlueprint] = useState<ProjectBlueprintResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pushToast = useToastStore((s) => s.pushToast);
   const navigate = useNavigate();
@@ -113,9 +146,20 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
     } else {
       // 新建模式：重置为默认值
       setForm(DEFAULT_FORM);
+      setStructureLevel('standard');
     }
+    setBlueprint(null);
     setError(null);
   }, [open, book]);
+
+  const busy = submitting || generatingBlueprint || confirmingBlueprint;
+
+  const handleClose = (): void => {
+    if (busy) return;
+    setBlueprint(null);
+    setError(null);
+    onClose();
+  };
 
   /** 通用字段更新 */
   const updateField = <K extends keyof BookFormState>(
@@ -133,27 +177,19 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
       return;
     }
     // 校验目标字数与每日目标为正数
-    if (form.targetWords <= 0) {
-      setError('目标字数需为正数');
+    if (!Number.isInteger(form.targetWords) || form.targetWords < 1 || form.targetWords > 100_000_000) {
+      setError('目标字数需为 1 到 100000000 的整数');
       return;
     }
-    if (form.dailyGoal <= 0) {
-      setError('每日目标需为正数');
+    if (!Number.isInteger(form.dailyGoal) || form.dailyGoal < 1 || form.dailyGoal > 100_000) {
+      setError('每日目标需为 1 到 100000 的整数');
       return;
     }
 
     setSubmitting(true);
     setError(null);
     try {
-      const payload = {
-        title: form.title.trim(),
-        subtitle: form.subtitle.trim(),
-        synopsis: form.synopsis.trim(),
-        genre: form.genre,
-        targetWords: form.targetWords,
-        coverColor: form.coverColor,
-        dailyGoal: form.dailyGoal,
-      };
+      const payload = createBookPayload(form);
       // book 存在则更新，否则新建
       const saved = book
         ? await bookRepository.update(book.id, payload)
@@ -167,8 +203,8 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
     }
   };
 
-  /** 创建作品并立即 AI 生成项目蓝图 */
-  const handleCreateWithBlueprint = async (): Promise<void> => {
+  /** 生成蓝图预览；此阶段不创建作品、不写入资料库。 */
+  const handleGenerateBlueprint = async (): Promise<void> => {
     if (!form.title.trim()) {
       setError('请填写作品名称');
       return;
@@ -177,59 +213,113 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
       setError('请填写作品简介，AI 需要简介才能生成项目架构');
       return;
     }
-    if (form.targetWords <= 0 || form.dailyGoal <= 0) {
-      setError('目标字数与每日目标需为正数');
+    if (!Number.isInteger(form.targetWords) || form.targetWords < 1 || form.targetWords > 100_000_000) {
+      setError('目标字数需为 1 到 100000000 的整数');
+      return;
+    }
+    if (!Number.isInteger(form.dailyGoal) || form.dailyGoal < 1 || form.dailyGoal > 100_000) {
+      setError('每日目标需为 1 到 100000 的整数');
       return;
     }
 
     setGeneratingBlueprint(true);
     setError(null);
-    let saved: Book | null = null;
     try {
-      // 1. 先创建作品
-      saved = await bookRepository.create({
-        title: form.title.trim(),
+      const generated = await generateProjectBlueprint({
+        bookTitle: form.title.trim(),
         subtitle: form.subtitle.trim(),
         synopsis: form.synopsis.trim(),
         genre: form.genre,
         targetWords: form.targetWords,
-        coverColor: form.coverColor,
-        dailyGoal: form.dailyGoal,
+        structureLevel,
       });
-      // 2. 调用 AI 生成完整项目蓝图（世界观 / 角色 / 场景 / 剧情 / 灵感 / 章节草稿）
-      await executeProjectBlueprint(
-        saved.id,
-        saved.title,
-        saved.subtitle,
-        saved.synopsis,
-        saved.genre,
-        saved.targetWords,
-      );
-      pushToast('success', '作品已创建，小说架构已生成');
-      onSaved(saved);
-      onClose();
+      setBlueprint(generated);
     } catch (err) {
-      // AI 生成失败时回滚：删除刚创建的空作品，避免重复创建
-      if (saved) {
-        try {
-          await bookRepository.delete(saved.id);
-        } catch (rollbackErr) {
-          pushToast(
-            'error',
-            `回滚空作品失败：${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`,
-          );
-        }
-      }
       setError(err instanceof Error ? err.message : '生成失败');
     } finally {
       setGeneratingBlueprint(false);
     }
   };
 
+  /** 用户确认蓝图后才创建作品并导入所保留的结构化条目。 */
+  const handleConfirmBlueprint = async (): Promise<void> => {
+    if (!blueprint || countBlueprintItems(blueprint) === 0) return;
+    setConfirmingBlueprint(true);
+    setError(null);
+    try {
+      const { book: saved, summary } = await createBookWithBlueprint(createBookPayload(form), blueprint);
+      pushToast(
+        'success',
+        `作品已创建：导入 ${summary.chapters} 个章节、${summary.characters} 个角色、${summary.scenes} 个场景`,
+      );
+      onSaved(saved);
+      setBlueprint(null);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '蓝图导入失败');
+    } finally {
+      setConfirmingBlueprint(false);
+    }
+  };
+
+  const handleRemoveBlueprintItem = (section: BlueprintSectionKey, index: number): void => {
+    setBlueprint((current) => current ? removeBlueprintItem(current, section, index) : current);
+  };
+
+  if (!book && blueprint) {
+    const itemCount = countBlueprintItems(blueprint);
+    return (
+      <Modal open={open} onClose={handleClose} title="审阅小说蓝图" width="760px">
+        <BlueprintReview
+          blueprint={blueprint}
+          bookTitle={form.title.trim()}
+          onRemove={handleRemoveBlueprintItem}
+        />
+        {error && (
+          <p className="mt-4 rounded border border-primary/40 bg-primary/8 px-3 py-2 text-xs text-primary">
+            {error}
+          </p>
+        )}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
+          <Button
+            variant="ghost"
+            size="md"
+            icon={<ArrowLeft className="h-4 w-4" aria-hidden="true" />}
+            onClick={() => setBlueprint(null)}
+            disabled={busy}
+          >
+            返回修改
+          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="md"
+              icon={<RefreshCw className="h-4 w-4" aria-hidden="true" />}
+              onClick={handleGenerateBlueprint}
+              loading={generatingBlueprint}
+              disabled={confirmingBlueprint}
+            >
+              重新生成
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
+              onClick={handleConfirmBlueprint}
+              loading={confirmingBlueprint}
+              disabled={generatingBlueprint || itemCount === 0}
+            >
+              确认创建并导入
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={handleClose}
       title={book ? '编辑作品' : '新建作品'}
       width="520px"
     >
@@ -324,6 +414,7 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
             name="targetWords"
             type="number"
             min={1}
+            max={100000000}
             step={10000}
             value={form.targetWords}
             onChange={(e) =>
@@ -338,7 +429,8 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
           name="dailyGoal"
           type="number"
           min={1}
-          step={500}
+          max={100000}
+          step={1}
           value={form.dailyGoal}
           onChange={(e) =>
             updateField('dailyGoal', Number(e.target.value) || 0)
@@ -378,6 +470,32 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
           </div>
         </div>
 
+        {!book && !modelUnconfigured && (
+          <div className="flex flex-col">
+            <label className="mb-1.5 block font-serif text-sm text-foreground">
+              架构深度
+            </label>
+            <div className="grid grid-cols-3 gap-1 rounded-md border border-border bg-muted p-1" role="group" aria-label="架构深度">
+              {STRUCTURE_LEVELS.map((level) => (
+                <button
+                  key={level.value}
+                  type="button"
+                  aria-pressed={structureLevel === level.value}
+                  onClick={() => setStructureLevel(level.value)}
+                  className={cn(
+                    'h-8 rounded font-sans text-sm transition-colors',
+                    structureLevel === level.value
+                      ? 'bg-background font-medium text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {level.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* 错误提示 */}
         {error && (
           <p className="rounded border border-primary/40 bg-primary/8 px-3 py-2 text-xs text-primary">
@@ -387,14 +505,14 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
 
         {/* 操作区 */}
         <div className="flex items-center justify-end gap-2 pt-2">
-          <Button variant="ghost" size="md" onClick={onClose} disabled={submitting || generatingBlueprint}>
+          <Button variant="ghost" size="md" onClick={handleClose} disabled={busy}>
             取消
           </Button>
           {/* 新建模式下额外提供"创建并 AI 生成架构"按钮 */}
           {!book && (
             <button
               type="button"
-              onClick={handleCreateWithBlueprint}
+              onClick={handleGenerateBlueprint}
               disabled={submitting || generatingBlueprint || modelUnconfigured}
               className={cn(
                 'flex items-center gap-1.5 rounded border border-secondary/40 bg-secondary/5 px-3 py-2',
@@ -402,14 +520,14 @@ export function BookForm({ open, onClose, book, onSaved }: BookFormProps) {
                 'hover:bg-secondary/10 hover:shadow-soft',
                 'disabled:cursor-not-allowed disabled:opacity-50',
               )}
-              title={modelUnconfigured ? '请先配置 AI 大模型' : '创建作品并调用 AI 自动生成世界观、角色、场景、剧情、灵感与章节草稿'}
+              title={modelUnconfigured ? '请先配置 AI 大模型' : '生成可审阅的世界观、角色、场景、剧情、灵感与章节蓝图'}
             >
               {generatingBlueprint ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
               ) : (
                 <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
               )}
-              {generatingBlueprint ? '生成中…' : '创建并生成架构'}
+              {generatingBlueprint ? '生成中…' : '生成蓝图预览'}
             </button>
           )}
           <Button

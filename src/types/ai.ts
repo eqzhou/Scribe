@@ -108,12 +108,15 @@ export interface AIForeshadowingItem {
 }
 
 /** 项目蓝图生成请求体 */
+export type ProjectStructureLevel = 'simple' | 'standard' | 'detailed';
+
 export interface ProjectBlueprintRequest {
   bookTitle: string;
   subtitle?: string;
   synopsis: string;
   genre: string;
   targetWords: number;
+  structureLevel?: ProjectStructureLevel;
 }
 
 /** 项目蓝图生成结果 */

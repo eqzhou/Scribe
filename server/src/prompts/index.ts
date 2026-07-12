@@ -257,14 +257,21 @@ export function buildProjectBlueprintMessages(
   subtitle: string | undefined,
   synopsis: string,
   genre: string,
-  targetWords: number
+  targetWords: number,
+  structureLevel: 'simple' | 'standard' | 'detailed' = 'standard',
 ): ChatMessage[] {
+  const levelGuide = {
+    simple: '简版：角色 3-4 个、场景 3-5 个、剧情线 1 条、剧情节点 5-8 个、灵感 3-5 张、伏笔 2-4 条、章节 6-8 个。',
+    standard: '标准版：角色 4-8 个、场景 6-10 个、剧情线 1-3 条、剧情节点 8-16 个、灵感 6-10 张、伏笔 4-8 条、章节 8-16 个。',
+    detailed: '详细版：角色 8-12 个、场景 10-16 个、剧情线 2-4 条、剧情节点 16-24 个、灵感 10-16 张、伏笔 8-12 条、章节 16-32 个。',
+  }[structureLevel];
   const system =
-    '你是资深小说架构师。根据用户的新书信息生成可直接入库的项目蓝图。只输出严格 JSON 对象，不要解释，不要代码块。字段必须包含 worldview、characters、scenes、plotLines、plotPoints、inspirations、foreshadowing、chapters。worldview 生成 6 条，category 只能是 geography/history/faction/system/culture/item；characters 生成 4-8 个，role 只能是 protagonist/supporting/antagonist/minor；scenes 生成 6-10 个；plotLines 生成 1-3 条，type 只能是 main/sub，status 用 planning；plotPoints 生成 8-16 个并用 plotLineTitle 关联剧情线；inspirations 生成 6-10 张；foreshadowing 生成 4-8 条，使用 setupChapterTitle/payoffChapterTitle 关联 chapters 中的标题；chapters 生成 8-16 个章节草案。所有字符串使用中文，内容具体、有故事钩子，避免空泛。';
+    `你是资深小说架构师。根据用户的新书信息生成可审阅、可入库的项目蓝图。只输出严格 JSON 对象，不要解释，不要代码块。字段必须包含 worldview、characters、scenes、plotLines、plotPoints、inspirations、foreshadowing、chapters。worldview 生成 6 条，category 只能是 geography/history/faction/system/culture/item；role 只能是 protagonist/supporting/antagonist/minor；剧情线 type 只能是 main/sub，status 用 planning；plotPoints 用 plotLineTitle 关联剧情线；foreshadowing 使用 setupChapterTitle/payoffChapterTitle 关联 chapters 中的标题。章节标题、角色名、场景名、剧情线标题必须各自唯一，同分类世界观标题必须唯一；所有引用名称必须来自本 JSON 对应集合。${levelGuide}所有字符串使用中文，内容具体、有故事钩子，避免空泛。`;
   const user = `【书名】${bookTitle}
 【副标题】${subtitle ?? '无'}
 【类型】${genre}
 【目标字数】${targetWords}
+【架构深度】${structureLevel}
 【用户输入的故事种子/简介】
 ${synopsis}
 

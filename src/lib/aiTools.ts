@@ -10,6 +10,7 @@ import type {
   RewriteStyle,
   WorldviewBatchItem,
   ProjectBlueprintResult,
+  ProjectBlueprintRequest,
   ChapterArchitectureResult,
   CharacterGenerateResult,
   CharacterExtractItem,
@@ -28,6 +29,7 @@ import {
   streamCharacterExtract,
 } from './aiClient';
 import { createAIGhostId, type AIGhostSource } from '../features/editor/nodes/AIGhostText';
+import { apiPost } from './api';
 import { useToastStore } from '../stores';
 import { resolveForeshadowingSyncPatch } from './foreshadowingSync';
 import {
@@ -51,6 +53,7 @@ import type {
   CharacterRole,
   PlotLineType,
   PlotLineStatus,
+  Book,
 } from '../types';
 
 /** 合法的世界观分类白名单（用于校验 AI 返回值） */
@@ -547,6 +550,42 @@ export interface ProjectBlueprintInsertSummary {
   chapters: number;
 }
 
+export interface BlueprintImportResult {
+  book: Book;
+  summary: ProjectBlueprintInsertSummary;
+}
+
+/** 服务端在单个数据库事务中创建作品并导入确认后的蓝图。 */
+export async function createBookWithBlueprint(
+  book: Pick<Book, 'title' | 'subtitle' | 'synopsis' | 'genre' | 'targetWords' | 'coverColor' | 'dailyGoal'>,
+  blueprint: ProjectBlueprintResult,
+): Promise<BlueprintImportResult> {
+  return apiPost<BlueprintImportResult>('/api/books/from-blueprint', { book, blueprint });
+}
+
+/** 只生成并校验项目蓝图，不创建作品、不写入资料库。 */
+export async function generateProjectBlueprint(
+  request: ProjectBlueprintRequest,
+  onProgress?: (text: string) => void,
+  signal?: AbortSignal,
+): Promise<ProjectBlueprintResult> {
+  return new Promise((resolve, reject) => {
+    streamProjectBlueprint(
+      request,
+      (chunk) => onProgress?.(chunk),
+      (blueprint) => {
+        if (!blueprint) {
+          reject(new Error('AI 未返回有效项目蓝图'));
+          return;
+        }
+        resolve(blueprint);
+      },
+      (err) => reject(err),
+      signal,
+    );
+  });
+}
+
 /**
  * 执行项目蓝图生成并写入资料库。
  */
@@ -560,37 +599,20 @@ export async function executeProjectBlueprint(
   onProgress?: (text: string) => void,
   signal?: AbortSignal,
 ): Promise<ProjectBlueprintInsertSummary> {
-  return new Promise((resolve, reject) => {
-    streamProjectBlueprint(
-      { bookTitle, subtitle, synopsis, genre, targetWords },
-      (chunk) => onProgress?.(chunk),
-      async (blueprint: ProjectBlueprintResult | null) => {
-        try {
-          if (!blueprint) {
-            throw new Error('AI 未返回有效项目蓝图');
-          }
-          const summary = await insertProjectBlueprint(bookId, blueprint);
-          useToastStore.getState().pushToast(
-            'success',
-            `架构已生成：世界观 ${summary.worldview}、角色 ${summary.characters}、场景 ${summary.scenes}、剧情节点 ${summary.plotPoints}、伏笔 ${summary.foreshadowing}、灵感 ${summary.inspirations}`,
-          );
-          resolve(summary);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          useToastStore.getState().pushToast('error', `项目蓝图入库失败：${msg}`);
-          reject(err);
-        }
-      },
-      (err) => {
-        useToastStore.getState().pushToast('error', `AI 项目蓝图生成失败：${err.message}`);
-        reject(err);
-      },
-      signal,
-    );
-  });
+  const blueprint = await generateProjectBlueprint(
+    { bookTitle, subtitle, synopsis, genre, targetWords, structureLevel: 'standard' },
+    onProgress,
+    signal,
+  );
+  const summary = await insertProjectBlueprint(bookId, blueprint);
+  useToastStore.getState().pushToast(
+    'success',
+    `架构已生成：世界观 ${summary.worldview}、角色 ${summary.characters}、场景 ${summary.scenes}、剧情节点 ${summary.plotPoints}、伏笔 ${summary.foreshadowing}、灵感 ${summary.inspirations}`,
+  );
+  return summary;
 }
 
-async function insertProjectBlueprint(
+export async function insertProjectBlueprint(
   bookId: string,
   blueprint: ProjectBlueprintResult,
 ): Promise<ProjectBlueprintInsertSummary> {

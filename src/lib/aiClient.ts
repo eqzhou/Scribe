@@ -239,8 +239,19 @@ function parseJsonOrFallback<T>(raw: string, fallback: T): T {
 }
 
 const titleSchema = z.string().trim().min(1).max(120);
+const fileTitleIdentity = (value: string) => value.normalize('NFC').toLocaleLowerCase('en-US');
+const fileTitleSchema = z.string().trim().min(1).max(100).refine((value) => {
+  const hasControlCharacter = Array.from(value).some((character) => character.charCodeAt(0) < 32);
+  const hasIllegalCharacter = /[\\/:*?"<>|]/.test(value);
+  const hasTraversalSegment = /(?:^|[\\/])\.\.(?:[\\/]|$)/.test(value);
+  return !hasControlCharacter
+    && !hasIllegalCharacter
+    && !hasTraversalSegment
+    && !/^[\s.]+|[\s.]+$/.test(value)
+    && new TextEncoder().encode(`${value}.md`).length <= 255;
+}, '章节标题包含文件系统不支持的字符');
 const textSchema = z.string().trim().min(1).max(5000);
-const optionalReferenceSchema = z.string().trim().max(120).optional();
+const optionalReferenceSchema = z.string().trim().max(120).transform((value) => value || undefined).optional();
 const tagsSchema = z.array(z.string().trim().min(1).max(50)).max(8);
 const characterRoleSchema = z.enum(['protagonist', 'supporting', 'antagonist', 'minor']);
 const worldviewCategorySchema = z.enum(['geography', 'history', 'faction', 'system', 'culture', 'item']);
@@ -302,7 +313,7 @@ const projectBlueprintSchema = z.object({
     status: z.literal('pending').optional(),
   })).min(1).max(12),
   chapters: z.array(z.object({
-    title: titleSchema,
+    title: fileTitleSchema,
     summary: textSchema,
     outline: textSchema,
     order: z.number().int().min(0).max(1000),
@@ -310,8 +321,50 @@ const projectBlueprintSchema = z.object({
 }).superRefine((blueprint, ctx) => {
   const chapterTitles = new Set(blueprint.chapters.map((chapter) => chapter.title));
   const plotLineTitles = new Set(blueprint.plotLines.map((line) => line.title));
+  const characterNames = new Set(blueprint.characters.map((character) => character.name));
+  const worldviewTitles = new Set(blueprint.worldview.map((entry) => entry.title));
+
+  const ensureUnique = (
+    values: string[],
+    path: string,
+    message: string,
+  ) => {
+    const seen = new Set<string>();
+    values.forEach((value, index) => {
+      if (seen.has(value)) ctx.addIssue({ code: 'custom', path: [path, index], message });
+      seen.add(value);
+    });
+  };
+  ensureUnique(blueprint.chapters.map((item) => item.title), 'chapters', '章节标题不能重复');
+  ensureUnique(
+    blueprint.chapters.map((item) => fileTitleIdentity(item.title)),
+    'chapters',
+    '章节标题在文件系统中不能重复',
+  );
+  ensureUnique(blueprint.characters.map((item) => item.name), 'characters', '角色名称不能重复');
+  ensureUnique(blueprint.scenes.map((item) => item.name), 'scenes', '场景名称不能重复');
+  ensureUnique(blueprint.plotLines.map((item) => item.title), 'plotLines', '剧情线标题不能重复');
+  ensureUnique(blueprint.worldview.map((item) => item.title), 'worldview', '世界观标题不能重复');
+
+  for (const [index, character] of blueprint.characters.entries()) {
+    for (const title of character.relatedWorldviewTitles) {
+      if (!worldviewTitles.has(title)) {
+        ctx.addIssue({ code: 'custom', path: ['characters', index, 'relatedWorldviewTitles'], message: '角色引用了未知世界观' });
+      }
+    }
+  }
 
   for (const [index, scene] of blueprint.scenes.entries()) {
+    for (const name of scene.characterNames) {
+      if (!characterNames.has(name)) {
+        ctx.addIssue({ code: 'custom', path: ['scenes', index, 'characterNames'], message: '场景引用了未知角色' });
+      }
+    }
+    for (const title of scene.worldviewTitles) {
+      if (!worldviewTitles.has(title)) {
+        ctx.addIssue({ code: 'custom', path: ['scenes', index, 'worldviewTitles'], message: '场景引用了未知世界观' });
+      }
+    }
     for (const chapterTitle of scene.chapterTitles) {
       if (!chapterTitles.has(chapterTitle)) {
         ctx.addIssue({ code: 'custom', path: ['scenes', index, 'chapterTitles'], message: '场景引用了未知章节' });
@@ -324,6 +377,11 @@ const projectBlueprintSchema = z.object({
     }
     if (point.chapterTitle && !chapterTitles.has(point.chapterTitle)) {
       ctx.addIssue({ code: 'custom', path: ['plotPoints', index, 'chapterTitle'], message: '剧情节点引用了未知章节' });
+    }
+    for (const name of point.characterNames) {
+      if (!characterNames.has(name)) {
+        ctx.addIssue({ code: 'custom', path: ['plotPoints', index, 'characterNames'], message: '剧情节点引用了未知角色' });
+      }
     }
   }
   for (const [index, foreshadowing] of blueprint.foreshadowing.entries()) {

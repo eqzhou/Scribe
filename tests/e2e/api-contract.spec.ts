@@ -23,6 +23,9 @@ import {
   updateGhostAttributes,
 } from '../../src/features/editor/nodes/AIGhostText';
 import { resolveForeshadowingSyncPatch } from '../../src/lib/foreshadowingSync';
+import { removeBlueprintItem } from '../../src/features/projects/blueprintUtils';
+import type { ProjectBlueprintResult } from '../../src/types/ai';
+import { createBookFromBlueprint } from '../../server/src/services/blueprintImportService';
 
 const BASE = 'http://localhost:8787/api';
 
@@ -58,6 +61,32 @@ async function setupUserAndBook(request: import('@playwright/test').APIRequestCo
   return { token, userId, bookId, headers, username };
 }
 
+function completeBlueprintFixture(): ProjectBlueprintResult {
+  return {
+    worldview: [{ category: 'geography', title: '云隐山', content: '主角成长的山门。', tags: ['山门'] }],
+    characters: [{
+      name: '林逸风', alias: '', faction: '云隐派', role: 'protagonist',
+      appearance: '青衫长剑。', personality: '正直果断。', background: '云隐派弟子。',
+      arc: '从少年成长为守护者。', tags: ['主角'], relatedWorldviewTitles: ['云隐山'],
+    }],
+    scenes: [{
+      name: '云隐山后山', description: '迷雾中的禁地。', atmosphere: ['神秘'],
+      characterNames: ['林逸风'], worldviewTitles: ['云隐山'], chapterTitles: ['第一章'],
+    }],
+    plotLines: [{ title: '身世之谜', type: 'main', synopsis: '主角追查自己的身世。', status: 'planning', order: 0 }],
+    plotPoints: [{
+      plotLineTitle: '身世之谜', title: '发现玉佩', description: '主角在禁地发现线索。',
+      chapterTitle: '第一章', characterNames: ['林逸风'], order: 0, timelineOrder: 0,
+    }],
+    inspirations: [{ title: '失落玉佩', content: '可作为后续谜团线索。', tags: ['伏笔'], category: '道具' }],
+    foreshadowing: [{
+      title: '玉佩裂纹', description: '裂纹暗示主角血脉。',
+      setupChapterTitle: '第一章', payoffChapterTitle: '第一章', status: 'pending',
+    }],
+    chapters: [{ title: '第一章', summary: '主角发现玉佩。', outline: '进入禁地并发现线索。', order: 0 }],
+  };
+}
+
 test.describe('API 路径契约验证', () => {
   test('仅接受全文生成的 Ghost Text 才触发章节结构同步', () => {
     expect(isFulltextGhostAcceptance({ source: 'fulltext', text: '已接受的正文' })).toBeTruthy();
@@ -87,30 +116,21 @@ test.describe('API 路径契约验证', () => {
     )).toEqual({ setupChapterId: 'chapter-2', status: 'planted' });
   });
 
+  test('移除蓝图核心条目时同步清理下游引用', () => {
+    const blueprint = completeBlueprintFixture();
+    const withoutPlotLine = removeBlueprintItem(blueprint, 'plotLines', 0);
+    expect(withoutPlotLine.plotLines).toHaveLength(0);
+    expect(withoutPlotLine.plotPoints).toHaveLength(0);
+
+    const withoutChapter = removeBlueprintItem(blueprint, 'chapters', 0);
+    expect(withoutChapter.scenes[0].chapterTitles).toEqual([]);
+    expect(withoutChapter.plotPoints[0].chapterTitle).toBeUndefined();
+    expect(withoutChapter.foreshadowing[0].setupChapterTitle).toBeUndefined();
+    expect(withoutChapter.foreshadowing[0].payoffChapterTitle).toBeUndefined();
+  });
+
   test('AI 结构化 JSON 契约拒绝缺失必填集合的结果', () => {
-    const completeBlueprint = {
-      worldview: [{ category: 'geography', title: '云隐山', content: '主角成长的山门。', tags: ['山门'] }],
-      characters: [{
-        name: '林逸风', alias: '', faction: '云隐派', role: 'protagonist',
-        appearance: '青衫长剑。', personality: '正直果断。', background: '云隐派弟子。',
-        arc: '从少年成长为守护者。', tags: ['主角'], relatedWorldviewTitles: ['云隐山'],
-      }],
-      scenes: [{
-        name: '云隐山后山', description: '迷雾中的禁地。', atmosphere: ['神秘'],
-        characterNames: ['林逸风'], worldviewTitles: ['云隐山'], chapterTitles: ['第一章'],
-      }],
-      plotLines: [{ title: '身世之谜', type: 'main', synopsis: '主角追查自己的身世。', status: 'planning', order: 0 }],
-      plotPoints: [{
-        plotLineTitle: '身世之谜', title: '发现玉佩', description: '主角在禁地发现线索。',
-        chapterTitle: '第一章', characterNames: ['林逸风'], order: 0, timelineOrder: 0,
-      }],
-      inspirations: [{ title: '失落玉佩', content: '可作为后续谜团线索。', tags: ['伏笔'], category: '道具' }],
-      foreshadowing: [{
-        title: '玉佩裂纹', description: '裂纹暗示主角血脉。',
-        setupChapterTitle: '第一章', payoffChapterTitle: '第一章', status: 'pending',
-      }],
-      chapters: [{ title: '第一章', summary: '主角发现玉佩。', outline: '进入禁地并发现线索。', order: 0 }],
-    };
+    const completeBlueprint = completeBlueprintFixture();
     expect(parseProjectBlueprintResult(JSON.stringify(completeBlueprint))).not.toBeNull();
     expect(parseProjectBlueprintResult(JSON.stringify({ worldview: [] }))).toBeNull();
     expect(parseProjectBlueprintResult(JSON.stringify({ ...completeBlueprint, characters: [{}] }))).toBeNull();
@@ -118,6 +138,54 @@ test.describe('API 路径契约验证', () => {
       ...completeBlueprint,
       foreshadowing: [{ ...completeBlueprint.foreshadowing[0], setupChapterTitle: '不存在的章节' }],
     }))).toBeNull();
+    expect(parseProjectBlueprintResult(JSON.stringify({
+      ...completeBlueprint,
+      scenes: [{ ...completeBlueprint.scenes[0], characterNames: ['不存在的角色'] }],
+    }))).toBeNull();
+    expect(parseProjectBlueprintResult(JSON.stringify({
+      ...completeBlueprint,
+      chapters: [...completeBlueprint.chapters, { ...completeBlueprint.chapters[0] }],
+    }))).toBeNull();
+    const overlongAsciiTitle = 'a'.repeat(101);
+    expect(parseProjectBlueprintResult(JSON.stringify({
+      ...completeBlueprint,
+      chapters: [{ ...completeBlueprint.chapters[0], title: overlongAsciiTitle }],
+      scenes: [{ ...completeBlueprint.scenes[0], chapterTitles: [overlongAsciiTitle] }],
+      plotPoints: [{ ...completeBlueprint.plotPoints[0], chapterTitle: overlongAsciiTitle }],
+      foreshadowing: [{
+        ...completeBlueprint.foreshadowing[0],
+        setupChapterTitle: overlongAsciiTitle,
+        payoffChapterTitle: overlongAsciiTitle,
+      }],
+    }))).toBeNull();
+    expect(parseProjectBlueprintResult(JSON.stringify({
+      ...completeBlueprint,
+      chapters: [
+        { ...completeBlueprint.chapters[0], title: 'Chapter' },
+        { ...completeBlueprint.chapters[0], title: 'chapter', order: 1 },
+      ],
+      scenes: [{ ...completeBlueprint.scenes[0], chapterTitles: ['Chapter'] }],
+      plotPoints: [{ ...completeBlueprint.plotPoints[0], chapterTitle: 'Chapter' }],
+      foreshadowing: [{
+        ...completeBlueprint.foreshadowing[0], setupChapterTitle: 'Chapter', payoffChapterTitle: 'Chapter',
+      }],
+    }))).toBeNull();
+    expect(parseProjectBlueprintResult(JSON.stringify({
+      ...completeBlueprint,
+      worldview: [
+        completeBlueprint.worldview[0],
+        { ...completeBlueprint.worldview[0], category: 'history' },
+      ],
+    }))).toBeNull();
+    const normalizedEmptyReferences = parseProjectBlueprintResult(JSON.stringify({
+      ...completeBlueprint,
+      plotPoints: [{ ...completeBlueprint.plotPoints[0], chapterTitle: '' }],
+      foreshadowing: [{
+        ...completeBlueprint.foreshadowing[0], setupChapterTitle: '', payoffChapterTitle: '',
+      }],
+    }));
+    expect(normalizedEmptyReferences?.plotPoints[0].chapterTitle).toBeUndefined();
+    expect(normalizedEmptyReferences?.foreshadowing[0].setupChapterTitle).toBeUndefined();
 
     const completeArchitecture = {
       chapterSummary: '本章摘要',
@@ -134,6 +202,161 @@ test.describe('API 路径契约验证', () => {
       ...completeArchitecture,
       foreshadowing: [{ title: '伏笔', description: '描述', action: 'invalid' }],
     }))).toBeNull();
+  });
+
+  test('蓝图生成参数严格校验，导入边界返回稳定错误', async ({ request }) => {
+    const { headers } = await setupUserAndBook(request);
+    const invalidRequest = await request.post(`${BASE}/ai/project-blueprint`, {
+      headers,
+      data: {
+        bookTitle: '参数校验', synopsis: '测试简介', genre: '玄幻',
+        targetWords: -1, structureLevel: 'unknown',
+      },
+    });
+    expect(invalidRequest.status()).toBe(400);
+
+    const blueprint = completeBlueprintFixture();
+    const invalidTitle = await request.post(`${BASE}/books/from-blueprint`, {
+      headers,
+      data: {
+        book: {
+          title: '///', subtitle: '', synopsis: '验证标题。', genre: '玄幻',
+          targetWords: 100000, coverColor: '#3d4a3d', dailyGoal: 2000,
+        },
+        blueprint,
+      },
+    });
+    expect(invalidTitle.status()).toBe(400);
+
+    const invalidChapterTitle = '../坏章节';
+    const invalidChapter = await request.post(`${BASE}/books/from-blueprint`, {
+      headers,
+      data: {
+        book: {
+          title: `非法章节_${Date.now().toString(36)}`, subtitle: '', synopsis: '验证章节标题。', genre: '玄幻',
+          targetWords: 100000, coverColor: '#3d4a3d', dailyGoal: 2000,
+        },
+        blueprint: {
+          ...blueprint,
+          chapters: [{ ...blueprint.chapters[0], title: invalidChapterTitle }],
+          scenes: [{ ...blueprint.scenes[0], chapterTitles: [invalidChapterTitle] }],
+          plotPoints: [{ ...blueprint.plotPoints[0], chapterTitle: invalidChapterTitle }],
+          foreshadowing: [{
+            ...blueprint.foreshadowing[0],
+            setupChapterTitle: invalidChapterTitle,
+            payoffChapterTitle: invalidChapterTitle,
+          }],
+        },
+      },
+    });
+    expect(invalidChapter.status()).toBe(400);
+
+    const oversizedChapterTitle = '章'.repeat(90);
+    const oversizedChapter = await request.post(`${BASE}/books/from-blueprint`, {
+      headers,
+      data: {
+        book: {
+          title: `超长章节_${Date.now().toString(36)}`, subtitle: '', synopsis: '验证字节长度。', genre: '玄幻',
+          targetWords: 100000, coverColor: '#3d4a3d', dailyGoal: 2000,
+        },
+        blueprint: {
+          ...blueprint,
+          chapters: [{ ...blueprint.chapters[0], title: oversizedChapterTitle }],
+          scenes: [{ ...blueprint.scenes[0], chapterTitles: [oversizedChapterTitle] }],
+          plotPoints: [{ ...blueprint.plotPoints[0], chapterTitle: oversizedChapterTitle }],
+          foreshadowing: [{
+            ...blueprint.foreshadowing[0],
+            setupChapterTitle: oversizedChapterTitle,
+            payoffChapterTitle: oversizedChapterTitle,
+          }],
+        },
+      },
+    });
+    expect(oversizedChapter.status()).toBe(400);
+
+    const duplicateBook = await request.post(`${BASE}/books/from-blueprint`, {
+      headers,
+      data: {
+        book: {
+          title: 'e2e测试作品', subtitle: '', synopsis: '验证路径冲突。', genre: '玄幻',
+          targetWords: 100000, coverColor: '#3d4a3d', dailyGoal: 2000,
+        },
+        blueprint,
+      },
+    });
+    expect(duplicateBook.status()).toBe(409);
+    expect(await duplicateBook.json()).toEqual({ error: '已存在文件路径相同的作品标题' });
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await request.post(`${BASE}/books/from-blueprint`, {
+        headers,
+        data: {
+          book: {
+            title: 'E2E测试作品', subtitle: '', synopsis: '验证限流。', genre: '玄幻',
+            targetWords: 100000, coverColor: '#3d4a3d', dailyGoal: 2000,
+          },
+          blueprint,
+        },
+      });
+    }
+    const rateLimited = await request.post(`${BASE}/books/from-blueprint`, {
+      headers,
+      data: {
+        book: {
+          title: 'E2E测试作品', subtitle: '', synopsis: '验证限流。', genre: '玄幻',
+          targetWords: 100000, coverColor: '#3d4a3d', dailyGoal: 2000,
+        },
+        blueprint,
+      },
+    });
+    expect(rateLimited.status()).toBe(429);
+  });
+
+  test('蓝图导入在事务中途失败时不残留作品', async ({ request }) => {
+    const { headers, userId } = await setupUserAndBook(request);
+    const title = `事务回滚_${Date.now().toString(36)}`;
+    const blueprint = completeBlueprintFixture();
+    const duplicateCharacters = {
+      book: {
+        title, subtitle: '', synopsis: '验证事务回滚。', genre: '玄幻',
+        targetWords: 100000, coverColor: '#3d4a3d', dailyGoal: 2000,
+      },
+      blueprint: {
+        ...blueprint,
+        characters: [blueprint.characters[0], { ...blueprint.characters[0] }],
+      },
+    } as unknown as Parameters<typeof createBookFromBlueprint>[1];
+
+    await expect(createBookFromBlueprint(userId, duplicateCharacters)).rejects.toThrow();
+    const books = await request.get(`${BASE}/books`, { headers });
+    expect((await books.json()).some((book: { title: string }) => book.title === title)).toBeFalsy();
+  });
+
+  test('蓝图导入同步世界观双向关系', async ({ request }) => {
+    const { headers } = await setupUserAndBook(request);
+    const title = `关系同步_${Date.now().toString(36)}`;
+    const created = await request.post(`${BASE}/books/from-blueprint`, {
+      headers,
+      data: {
+        book: {
+          title, subtitle: '', synopsis: '验证关系同步。', genre: '玄幻',
+          targetWords: 100000, coverColor: '#3d4a3d', dailyGoal: 2000,
+        },
+        blueprint: completeBlueprintFixture(),
+      },
+    });
+    expect(created.status()).toBe(201);
+    const { book } = await created.json();
+    const [worldviewResponse, charactersResponse, scenesResponse] = await Promise.all([
+      request.get(`${BASE}/books/${book.id}/worldview`, { headers }),
+      request.get(`${BASE}/books/${book.id}/characters`, { headers }),
+      request.get(`${BASE}/books/${book.id}/scenes`, { headers }),
+    ]);
+    const [worldview] = await worldviewResponse.json();
+    const [character] = await charactersResponse.json();
+    const [scene] = await scenesResponse.json();
+    expect(worldview.relatedCharacterIds).toEqual([character.id]);
+    expect(worldview.relatedSceneIds).toEqual([scene.id]);
   });
 
   test('落地页截图资源可访问', async ({ request }) => {

@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
+import { z } from 'zod';
 import { buildChatCompletionsUrl, streamChat, chat, validateBaseUrl } from '../services/aiService.js';
 import type { ModelConfig } from '../services/aiService.js';
 import { getActiveModel } from '../services/modelStore.js';
+import { isValidFileSegment } from '../lib/fileStore.js';
 import {
   buildContinueMessages,
   buildRewriteMessages,
@@ -335,23 +337,51 @@ router.post('/worldview-batch', createJsonRoute<{
   ['bookTitle'],
 ));
 
-// 项目蓝图：新建作品时生成世界观、角色、场景、剧情、灵感与章节草案
-router.post('/project-blueprint', createJsonRoute<{
-  bookTitle: string;
-  subtitle?: string;
-  synopsis: string;
-  genre: string;
-  targetWords: number;
-}>(
-  (body) => buildProjectBlueprintMessages(
-    body.bookTitle,
-    body.subtitle,
-    body.synopsis ?? '',
-    body.genre ?? '其他',
-    Number(body.targetWords ?? 0),
-  ),
-  ['bookTitle', 'synopsis'],
-));
+const projectBlueprintRequestSchema = z.object({
+  bookTitle: z.string().trim().min(1).max(60)
+    .refine(isValidFileSegment, '作品标题包含文件系统不支持的字符'),
+  subtitle: z.string().trim().max(60).optional(),
+  synopsis: z.string().trim().min(1).max(500),
+  genre: z.string().trim().min(1).max(50),
+  targetWords: z.number().int().min(1).max(100_000_000),
+  structureLevel: z.enum(['simple', 'standard', 'detailed']).default('standard'),
+});
+
+// 项目蓝图：严格校验创意种子后生成世界观、角色、场景、剧情、灵感与章节草案
+router.post('/project-blueprint', async (req: Request, res: Response) => {
+  const parsed = projectBlueprintRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: parsed.error.issues[0]?.message ?? '项目蓝图参数校验失败',
+      path: parsed.error.issues[0]?.path.join('.'),
+    });
+    return;
+  }
+  try {
+    const body = parsed.data;
+    const messages = buildProjectBlueprintMessages(
+      body.bookTitle,
+      body.subtitle,
+      body.synopsis,
+      body.genre,
+      body.targetWords,
+      body.structureLevel,
+    );
+    const modelConfig = await resolveActiveModelConfig(req.userId!);
+    const full = await chat(messages, { temperature: 0.8 }, modelConfig);
+    setSSEHeaders(res);
+    const segmentSize = 512;
+    for (let index = 0; index < full.length; index += segmentSize) {
+      res.write(`data: ${JSON.stringify({ text: full.slice(index, index + segmentSize) })}\n\n`);
+      flush(res);
+    }
+    res.write('data: [DONE]\n\n');
+    flush(res);
+    res.end();
+  } catch (err) {
+    handleStreamError(res, err);
+  }
+});
 
 // 章节结构分析：正文生成后提取本章副产物
 router.post('/chapter-architecture', createJsonRoute<{

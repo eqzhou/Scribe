@@ -10,8 +10,42 @@ import type { Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import * as bookRepo from '../repositories/bookRepository.js';
 import { deleteBookFiles, renameBook } from '../lib/fileStore.js';
+import {
+  BlueprintImportConflictError,
+  blueprintImportSchema,
+  createBookFromBlueprint,
+} from '../services/blueprintImportService.js';
 
 export const router = Router();
+
+const BLUEPRINT_IMPORT_WINDOW_MS = 60_000;
+const BLUEPRINT_IMPORT_LIMIT = 3;
+const blueprintImportWindows = new Map<string, { startedAt: number; count: number }>();
+const activeBlueprintImports = new Set<string>();
+
+function reserveBlueprintImport(userId: string): 'ok' | 'busy' | 'rate-limited' {
+  if (activeBlueprintImports.has(userId)) return 'busy';
+
+  const now = Date.now();
+  const current = blueprintImportWindows.get(userId);
+  const isNewWindow = !current || now - current.startedAt >= BLUEPRINT_IMPORT_WINDOW_MS;
+  const window = isNewWindow
+    ? { startedAt: now, count: 0 }
+    : current;
+  if (window.count >= BLUEPRINT_IMPORT_LIMIT) return 'rate-limited';
+
+  blueprintImportWindows.set(userId, { ...window, count: window.count + 1 });
+  if (isNewWindow) {
+    const startedAt = window.startedAt;
+    setTimeout(() => {
+      if (blueprintImportWindows.get(userId)?.startedAt === startedAt) {
+        blueprintImportWindows.delete(userId);
+      }
+    }, BLUEPRINT_IMPORT_WINDOW_MS).unref();
+  }
+  activeBlueprintImports.add(userId);
+  return 'ok';
+}
 
 // 列出当前用户全部作品
 router.get('/books', requireAuth, async (req: Request, res: Response) => {
@@ -55,6 +89,38 @@ router.post('/books', requireAuth, async (req: Request, res: Response) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : '创建作品失败';
     res.status(500).json({ error: message });
+  }
+});
+
+// 原子创建作品并导入用户确认后的项目蓝图
+router.post('/books/from-blueprint', requireAuth, async (req: Request, res: Response) => {
+  const parsed = blueprintImportSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: parsed.error.issues[0]?.message ?? '蓝图参数校验失败',
+      path: parsed.error.issues[0]?.path.join('.'),
+    });
+    return;
+  }
+  const reservation = reserveBlueprintImport(req.userId!);
+  if (reservation !== 'ok') {
+    res.status(429).json({
+      error: reservation === 'busy' ? '已有蓝图正在导入，请稍后再试' : '蓝图导入过于频繁，请稍后再试',
+    });
+    return;
+  }
+  try {
+    const result = await createBookFromBlueprint(req.userId!, parsed.data);
+    res.status(201).json(result);
+  } catch (err) {
+    if (err instanceof BlueprintImportConflictError) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
+    console.error('创建作品并导入蓝图失败:', err);
+    res.status(500).json({ error: '创建作品并导入蓝图失败' });
+  } finally {
+    activeBlueprintImports.delete(req.userId!);
   }
 });
 
@@ -106,4 +172,3 @@ router.delete('/books/:id', requireAuth, async (req: Request, res: Response) => 
     res.status(500).json({ error: message });
   }
 });
-
